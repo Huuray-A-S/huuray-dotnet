@@ -98,10 +98,19 @@ public sealed class HuurayClient
         // null, and silently sending to "" would be a confusing failure.
         string baseUrl = (string.IsNullOrWhiteSpace(options.BaseUrl) ? DefaultBaseUrl : options.BaseUrl)
             .TrimEnd('/');
-        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out Uri? _))
+        // The scheme check is not decoration. UriKind.Absolute alone is
+        // platform-dependent: on Windows "/v4" is not absolute, but on Linux and
+        // macOS it parses happily as the file URI "file:///v4". Validating only
+        // absoluteness therefore accepts a misconfigured BaseUrl on exactly the
+        // platforms this SDK is most likely to run on in production, turning a
+        // clear construction-time error into a confusing failure at the first
+        // request. Requiring http(s) is also simply correct: this client speaks
+        // HTTP, so file://, ftp:// and friends are never valid here.
+        if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out Uri? parsedBaseUrl)
+            || (parsedBaseUrl.Scheme != Uri.UriSchemeHttp && parsedBaseUrl.Scheme != Uri.UriSchemeHttps))
         {
             throw new HuurayConfigurationException(
-                $"BaseUrl \"{options.BaseUrl}\" is not an absolute URL. Expected something like \"{DefaultBaseUrl}\".");
+                $"BaseUrl \"{options.BaseUrl}\" is not an absolute http(s) URL. Expected something like \"{DefaultBaseUrl}\".");
         }
 
         _apiToken = options.ApiToken;

@@ -23,11 +23,33 @@ public class ConstructionTests
             new HuurayClient(new HuurayClientOptions { ApiToken = "t", ApiSecret = string.Empty }));
     }
 
-    [Fact]
-    public void RejectsABaseUrlThatIsNotAbsolute()
+    [Theory]
+    // "/v4" is the case that differs by platform: not absolute on Windows, but a
+    // valid file:// URI on Linux and macOS. Validating the scheme makes the
+    // behaviour identical everywhere.
+    [InlineData("/v4")]
+    [InlineData("v4")]
+    [InlineData("file:///etc/passwd")]
+    [InlineData("ftp://example.test")]
+    public void RejectsABaseUrlThatIsNotAbsoluteHttp(string baseUrl)
     {
         Assert.Throws<HuurayConfigurationException>(() =>
-            new HuurayClient(new HuurayClientOptions { ApiToken = "t", ApiSecret = "s", BaseUrl = "/v4" }));
+            new HuurayClient(new HuurayClientOptions { ApiToken = "t", ApiSecret = "s", BaseUrl = baseUrl }));
+    }
+
+    [Theory]
+    [InlineData("https://api.huuray.com")]
+    [InlineData("http://localhost:8080")]
+    public void AcceptsAnAbsoluteHttpBaseUrl(string baseUrl)
+    {
+        HuurayClient client = new(new HuurayClientOptions
+        {
+            ApiToken = "t",
+            ApiSecret = "s",
+            BaseUrl = baseUrl,
+        });
+
+        Assert.NotNull(client);
     }
 
     [Fact]
