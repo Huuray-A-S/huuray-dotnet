@@ -1,0 +1,80 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+
+      - name: Restore
+        run: dotnet restore Huuray.sln
+
+      # TreatWarningsAsErrors is on for every project, so this is also the lint step.
+      - name: Build
+        run: dotnet build Huuray.sln --configuration Release --no-restore
+
+      # Runs the whole suite on both net8.0 and net9.0, including the three
+      # conformance gates that read openapi/huuray-v4.json. No test touches the network.
+      - name: Test
+        run: dotnet test Huuray.sln --configuration Release --no-build --verbosity normal
+
+  pack:
+    name: Pack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+
+      - name: Pack
+        run: dotnet pack Huuray.sln --configuration Release --output ./artifacts
+
+      # A package that cannot be produced is a release that fails at the worst moment.
+      - name: List the packages
+        run: ls -l ./artifacts
+
+  spec-is-still-v4:
+    name: The vendored spec is still v4
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # This client targets v4 only. A version bump in the vendored file is a
+      # deliberate decision, never something that arrives unnoticed in a diff.
+      - name: Check info.version
+        run: |
+          VERSION="$(jq -r '.info.version' openapi/huuray-v4.json)"
+          if [ "$VERSION" != "v4" ]; then
+            echo "openapi/huuray-v4.json declares info.version \"$VERSION\", but this client targets v4 only."
+            exit 1
+          fi
+          echo "Vendored specification is v4."

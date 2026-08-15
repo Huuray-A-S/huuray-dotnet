@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <!--
+      Global tools are installed by TFM but launched against whatever runtime the
+      user has. Without this a net8.0 tool refuses to start on a machine that only
+      has .NET 9 or 10 — `dotnet tool install` succeeds and `huuray balance` then
+      fails with "You must install or update .NET to run this application".
+      LatestMajor is the standard setting for a .NET global tool.
+    -->
+    <RollForward>LatestMajor</RollForward>
+    <RootNamespace>Huuray.Cli</RootNamespace>
+    <AssemblyName>Huuray.Cli</AssemblyName>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>huuray</ToolCommandName>
+    <PackageId>Huuray.Cli</PackageId>
+    <Title>Huuray CLI — read-only</Title>
+    <Description>Read-only command line interface for the Huuray API v4: balances, catalogue, templates, stock, exchange rates and order lookup. Cannot order, resend or cancel, and never prints a voucher code.</Description>
+    <PackageTags>huuray;gift-card;rewards;cli;dotnet-tool</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>avatar.png</PackageIcon>
+
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="../../.github/assets/avatar.png" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../Huuray/Huuray.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Huuray.Tests" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,6 @@
+# Normalise line endings so the repo is identical on Windows, macOS and Linux
+# runners — deterministic builds depend on it.
+* text=auto eol=lf
+*.svg text eol=lf
+*.png binary
+*.snk binary

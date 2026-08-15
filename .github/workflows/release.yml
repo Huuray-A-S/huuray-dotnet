@@ -1,0 +1,69 @@
+name: Release
+
+# Publishes to NuGet when a version tag is pushed:
+#
+#   git tag v0.1.0 && git push --follow-tags
+#
+# Requires a NUGET_API_KEY secret with push rights on the "Huuray" and "Huuray.Cli"
+# package ids. Symbol packages are pushed alongside, so stack traces from a consumer's
+# production incident can be resolved back to this source.
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      # workflow_dispatch only makes sense on a tag ref. Fail fast with a clear message
+      # instead of burning a full restore/test cycle and then failing the tag check
+      # against a branch name.
+      - name: Require a tag ref
+        if: github.ref_type != 'tag'
+        run: |
+          echo "This workflow publishes from v* tags only."
+          echo "Dispatched on '${GITHUB_REF_NAME}' (${{ github.ref_type }}) — pick the tag in the 'Run workflow' ref dropdown."
+          exit 1
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+
+      - name: Restore
+        run: dotnet restore Huuray.sln
+
+      - name: Build
+        run: dotnet build Huuray.sln --configuration Release --no-restore
+
+      # Never publish something that does not pass its own gates.
+      - name: Test
+        run: dotnet test Huuray.sln --configuration Release --no-build
+
+      - name: Check the tag matches the version in Directory.Build.props
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          PROPS="$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' Directory.Build.props | head -n 1)"
+          if [ "$TAG" != "$PROPS" ]; then
+            echo "Tag v$TAG does not match Directory.Build.props version $PROPS."
+            exit 1
+          fi
+          echo "Tag and package version agree on $PROPS."
+
+      - name: Pack
+        run: dotnet pack Huuray.sln --configuration Release --no-build --output ./artifacts
+
+      - name: Push to NuGet
+        run: |
+          dotnet nuget push "./artifacts/*.nupkg" \
+            --api-key "${{ secrets.NUGET_API_KEY }}" \
+            --source https://api.nuget.org/v3/index.json \
+            --skip-duplicate

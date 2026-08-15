@@ -1,0 +1,31 @@
+# Build output
+bin/
+obj/
+artifacts/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+*.userprefs
+
+# Packages produced by `dotnet pack`
+*.nupkg
+*.snupkg
+
+# Test and coverage output
+TestResults/
+coverage/
+*.coverage
+*.trx
+
+# Editors
+.vs/
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Never commit credentials.
+.env
+.env.*
+!.env.example
