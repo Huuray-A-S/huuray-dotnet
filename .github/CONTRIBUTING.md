@@ -1,6 +1,12 @@
 # Contributing
 
-Thanks for taking the time. Bug reports, documentation fixes and pull requests are all welcome.
+Thanks for taking the time.
+
+**This repository does not accept external pull requests.** It is a published client library that must stay in exact step with the Huuray API specification, and it moves real money, so changes come from Huuray. Please do not spend your time on a patch we cannot merge.
+
+**Questions, bug reports and suggestions are very welcome** — open a [discussion](https://github.com/Huuray-A-S/huuray-dotnet/discussions) to ask something, or an [issue](https://github.com/Huuray-A-S/huuray-dotnet/issues) to report a bug. We read every one.
+
+The rest of this file documents how the library is built and the rules it is held to, so you can read the code with confidence and describe a problem precisely.
 
 Everyone taking part is expected to follow the [Code of Conduct](CODE_OF_CONDUCT.md).
 
@@ -77,12 +83,15 @@ Some of this library moves real money. Changes in these areas get closer review,
 - Public members carry XML documentation. The package ships the documentation file.
 - Prefer explicit types over `var` in this codebase — the shapes are the interesting part.
 
-## Pull requests
+## Why there is no pull request workflow
 
-1. Branch from `main`.
-2. Keep the change focused — one concern per pull request.
-3. Make sure `dotnet build` and `dotnet test` both pass.
-4. Describe what changed and why. If it touches ordering, say what you did about the points above.
+Two reasons, both structural rather than a matter of taste:
+
+1. **Spec fidelity.** The types are generated from the vendored specification and three CI gates assert the client sends nothing the API does not document. A change that looks like an improvement usually needs an API change first, which is a conversation with Huuray, not a patch here.
+2. **It moves money.** The guards described above — never retrying an order, minor units as integers, never logging a voucher code — exist because getting them wrong costs real money. They are not open to drive-by modification.
+
+If you have found a bug or need behaviour the client does not offer, please open an issue or a discussion and describe the case. That is genuinely the fastest route to a fix.
+
 
 ## Reporting a bug
 
