@@ -232,7 +232,7 @@ logger.LogInformation("order complete {Payload}", Redaction.RedactJson(json));  
 The API signals "nothing found" as HTTP 404 with a message like *"There were no active templates"* — so `Templates.ListAsync()` on an account with no templates, or `Orders.SearchAsync()` with no match, throws `HuurayNotFoundException` rather than returning an empty list. Catch it and read it as "none exist":
 
 ```csharp
-IReadOnlyList<TemplateItem> templates = Array.Empty<TemplateItem>();
+IReadOnlyList<Template> templates = Array.Empty<Template>();
 try
 {
     templates = (await huuray.Templates.ListAsync()).Templates;

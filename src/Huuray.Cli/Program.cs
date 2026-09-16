@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Text.Json.Nodes;
 using System.Threading.Tasks;
 
@@ -26,7 +27,7 @@ huuray — read-only CLI for the Huuray API v4
   Commands
     balance                       Available balances, per currency
     catalogue [--all]             Products you can order (--all for the full catalogue)
-    templates                     Delivery templates on your account
+    templates                     Delivery and PDF templates on your account
     stock --token <t> [--value N] Stock for a product (value in minor units)
     rates --from EUR --to DKK     Exchange rate and spread
     search [--ref-id R] [--order-uid U] [--voucher-id N]
@@ -112,7 +113,7 @@ huuray — read-only CLI for the Huuray API v4
                 return await CatalogueAsync(client, asJson, CliArgs.HasFlag(parsed.Flags, "all")).ConfigureAwait(false);
 
             case "templates":
-                return await TemplatesAsync(client, asJson).ConfigureAwait(false);
+                return await TemplatesAsync(client, asJson, Console.Out).ConfigureAwait(false);
 
             case "stock":
                 return await StockAsync(
@@ -210,13 +211,21 @@ huuray — read-only CLI for the Huuray API v4
         return 0;
     }
 
-    private static async Task<int> TemplatesAsync(HuurayClient client, bool asJson)
+    /// <summary>
+    /// Lists both kinds of template: delivery templates and PDF templates.
+    /// </summary>
+    /// <remarks>
+    /// An account can have no delivery templates and many PDF templates, so printing only
+    /// the first list would show nothing at all. <paramref name="output"/> is a parameter so
+    /// tests can capture what is printed.
+    /// </remarks>
+    internal static async Task<int> TemplatesAsync(HuurayClient client, bool asJson, TextWriter output)
     {
         ListTemplatesResult result = await client.Templates.ListAsync().ConfigureAwait(false);
 
         JsonArray json = new();
         List<IReadOnlyList<KeyValuePair<string, string>>> rows = new();
-        foreach (TemplateItem template in result.Templates)
+        foreach (Template template in result.Templates)
         {
             json.Add(new JsonObject
             {
@@ -238,7 +247,47 @@ huuray — read-only CLI for the Huuray API v4
             });
         }
 
-        Emit(asJson, json, rows);
+        JsonArray pdfJson = new();
+        List<IReadOnlyList<KeyValuePair<string, string>>> pdfRows = new();
+        foreach (PdfTemplate pdfTemplate in result.PdfTemplates)
+        {
+            pdfJson.Add(new JsonObject
+            {
+                ["Uid"] = pdfTemplate.Uid,
+                ["Name"] = pdfTemplate.Name,
+                ["Type"] = pdfTemplate.Type,
+                ["Language"] = pdfTemplate.Language,
+                ["Country"] = pdfTemplate.Country,
+                ["BrandName"] = pdfTemplate.BrandName,
+            });
+
+            pdfRows.Add(new[]
+            {
+                new KeyValuePair<string, string>("uid", pdfTemplate.Uid ?? string.Empty),
+                new KeyValuePair<string, string>("name", pdfTemplate.Name ?? string.Empty),
+                new KeyValuePair<string, string>("type", pdfTemplate.Type ?? string.Empty),
+                new KeyValuePair<string, string>("language", pdfTemplate.Language ?? string.Empty),
+                new KeyValuePair<string, string>("country", pdfTemplate.Country ?? string.Empty),
+                new KeyValuePair<string, string>("brand", pdfTemplate.BrandName ?? string.Empty),
+            });
+        }
+
+        if (asJson)
+        {
+            WriteJson(output, new JsonObject
+            {
+                ["Templates"] = json,
+                ["PdfTemplates"] = pdfJson,
+            });
+
+            return 0;
+        }
+
+        output.WriteLine("Delivery templates");
+        output.WriteLine(CliArgs.Table(rows));
+        output.WriteLine();
+        output.WriteLine("PDF templates");
+        output.WriteLine(CliArgs.Table(pdfRows));
         return 0;
     }
 
@@ -366,10 +415,16 @@ huuray — read-only CLI for the Huuray API v4
     {
         if (asJson)
         {
-            Console.WriteLine(Redaction.SafeStringify(json, indented: true));
+            WriteJson(Console.Out, json);
             return;
         }
 
         Console.WriteLine(CliArgs.Table(rows));
     }
+
+    /// <summary>
+    /// Writes one <c>--json</c> result through redaction. Every JSON output path goes through here.
+    /// </summary>
+    private static void WriteJson(TextWriter output, JsonNode json) =>
+        output.WriteLine(Redaction.SafeStringify(json, indented: true));
 }

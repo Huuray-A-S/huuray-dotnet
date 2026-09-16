@@ -110,7 +110,7 @@ public class TemplatesTests
 
         ListTemplatesResult result = await harness.Client.Templates.ListAsync();
 
-        TemplateItem template = Assert.Single(result.Templates);
+        Template template = Assert.Single(result.Templates);
         Assert.Equal(42, template.Id);
         Assert.Equal("Default", template.Name);
         Assert.Equal("Email", template.Type);

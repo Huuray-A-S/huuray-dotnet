@@ -13,7 +13,7 @@ namespace Huuray;
 /// <param name="Subject">Subject line, for email templates.</param>
 /// <param name="FormattedText">Template body including HTML.</param>
 /// <param name="PlainText">Template body as plain text.</param>
-public sealed record TemplateItem(
+public sealed record Template(
     int Id,
     string? Name,
     string? Type,
@@ -53,5 +53,5 @@ public sealed record PdfTemplate(
 /// attached to an email. Empty when the API returns none.
 /// </param>
 public sealed record ListTemplatesResult(
-    IReadOnlyList<TemplateItem> Templates,
+    IReadOnlyList<Template> Templates,
     IReadOnlyList<PdfTemplate> PdfTemplates);

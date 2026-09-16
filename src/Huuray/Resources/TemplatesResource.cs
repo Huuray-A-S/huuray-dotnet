@@ -46,11 +46,11 @@ public sealed class TemplatesResource
             .ConfigureAwait(false);
 
         List<TemplateItemWire> items = response.Data?.Templates ?? new List<TemplateItemWire>();
-        TemplateItem[] templates = new TemplateItem[items.Count];
+        Template[] templates = new Template[items.Count];
         for (int i = 0; i < items.Count; i++)
         {
             TemplateItemWire t = items[i];
-            templates[i] = new TemplateItem(
+            templates[i] = new Template(
                 t.Id,
                 t.Name,
                 t.Type,

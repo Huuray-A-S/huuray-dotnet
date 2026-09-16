@@ -395,6 +395,41 @@ public class PdfTemplateOrderTests
         Assert.Empty(harness.Calls);
     }
 
+    [Theory]
+    [InlineData("create")]
+    [InlineData("createSync")]
+    [InlineData("sendReward")]
+    public async Task ChecksOnlyThatTemplateIdIsPresent_NotWhatKindOfTemplateItIs(string method)
+    {
+        // Whether TemplateId is an email template is the API's call; the client cannot know
+        // without a lookup. A phone-only recipient hints at an SMS template, and must still be sent.
+        TestHarness harness = Fake.Client(
+            new MockResponse { Json = Fake.Json("{\"OrderUID\":\"x\",\"Vouchers\":[]}") });
+        Recipient phoneOnly = new() { Phone = "+4500000000" };
+
+        Task placing = method switch
+        {
+            "create" => harness.Client.Orders.CreateAsync(
+                WithDelivery with { Recipients = new[] { phoneOnly }, PdfTemplateUid = PdfUid }),
+            "createSync" => harness.Client.Orders.CreateSyncAsync(
+                WithDelivery with { Recipients = new[] { phoneOnly }, PdfTemplateUid = PdfUid }),
+            "sendReward" => harness.Client.Orders.SendRewardAsync(
+                Reward with { Recipient = phoneOnly, PdfTemplateUid = PdfUid }),
+            _ => throw new ArgumentOutOfRangeException(nameof(method), method, null),
+        };
+
+        await placing;
+
+        CapturedRequest call = Assert.Single(harness.Calls);
+        Assert.Equal("/v4/Order", call.Path);
+        JsonNode body = call.BodyJson!;
+        Assert.Equal(PdfUid, body["DeliveryPDFTemplateUid"]!.GetValue<string>());
+        Assert.Equal(42, body["DeliveryTemplateId"]!.GetValue<int>());
+        JsonNode recipient = Assert.Single(body["Recipients"]!.AsArray())!;
+        Assert.Equal("+4500000000", recipient["Phone"]!.GetValue<string>());
+        Assert.False(recipient.AsObject().ContainsKey("Email"));
+    }
+
     private static Task Place(TestHarness harness, string method, string? pdfTemplateUid) => method switch
     {
         "create" => harness.Client.Orders.CreateAsync(WithDelivery with { PdfTemplateUid = pdfTemplateUid }),

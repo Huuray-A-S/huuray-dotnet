@@ -42,6 +42,8 @@ First release. Complete coverage of the Huuray API v4.
 - `RequestAsync` — an escape hatch that signs any call and returns a `JsonNode`.
 - Read-only CLI tool `Huuray.Cli`: `balance`, `catalogue`, `templates`, `stock`, `rates`,
   `search`.
+- The CLI `templates` command lists PDF templates as well as delivery templates, in table
+  and `--json` output (`--json` prints one object: `Templates` and `PdfTemplates`).
 - `Redaction` and a redacting `Voucher.ToString()` for keeping voucher codes out of logs.
 - `MinorUnits` guards for amounts that arrive as `decimal` or `double`.
 - Multi-targets `net8.0` and `net9.0`. Source-generated `System.Text.Json` contexts, so the

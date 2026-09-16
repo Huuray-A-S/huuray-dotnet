@@ -76,7 +76,7 @@ try
 {
     ListTemplatesResult templates = await huuray.Templates.ListAsync();
     Console.WriteLine($"{templates.Templates.Count} delivery templates");
-    foreach (TemplateItem template in templates.Templates)
+    foreach (Template template in templates.Templates)
     {
         Console.WriteLine($"  {template.Id}  {template.Name} ({template.Type}, {template.Language})");
     }
