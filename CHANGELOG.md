@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **`Timeout` must be between 1 and 4294967294 milliseconds**, the range
+  `CancellationTokenSource.CancelAfter` honours; anything else throws
+  `HuurayConfigurationException` at construction. A sub-millisecond timeout fired at once,
+  a longer one threw `ArgumentOutOfRangeException` at the first request, and zero, a
+  negative value or `Timeout.InfiniteTimeSpan` was silently replaced with 30 seconds.
+
 ### Fixed
 
 - **Header values are checked before anything is sent.** An `ApiToken` or `UserAgent`
@@ -23,11 +31,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A `BaseUrl` with a space, control character or non-ASCII character** throws
   `HuurayConfigurationException` at construction. It was percent-encoded into the path,
   turned into an IDN host, or failed only at the first request.
-- **`Timeout` must be between 1 and 4294967294 milliseconds**, the range
-  `CancellationTokenSource.CancelAfter` honours; anything else throws
-  `HuurayConfigurationException` at construction. A sub-millisecond timeout fired at once,
-  a longer one threw `ArgumentOutOfRangeException` at the first request, and zero, a
-  negative value or `Timeout.InfiniteTimeSpan` was silently replaced with 30 seconds.
 - None of the header, path or base URL messages quotes the rejected value.
 
 ### Documentation
@@ -58,7 +61,7 @@ date:
   empty 200, for an account with no templates. This is why the reconciliation examples
   treat `HuurayNotFoundException` from `/v4/Search` as "the order did not land".
 - **`POST /v4/Template` answered HTTP 200 with an empty `Templates` list** for an account
-  with 37 PDF templates and no email or SMS templates — observed live 2026-09-16. So
+  with PDF templates but no email or SMS templates — observed live 2026-09-16. So
   `Templates.ListAsync()` can throw `HuurayNotFoundException` or return an empty list.
 
 ## [0.1.0] — unreleased
