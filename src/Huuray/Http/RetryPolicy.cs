@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace Huuray;
 
@@ -17,6 +18,9 @@ internal sealed class RetryPolicy
     /// backing off is strictly better than hammering.
     /// </remarks>
     private static readonly HashSet<int> RetryableStatuses = new() { 408, 425, 429, 500, 502, 503, 504 };
+
+    /// <summary>The longest delay <see cref="System.Threading.Tasks.Task.Delay(TimeSpan)"/> accepts.</summary>
+    private static readonly TimeSpan MaxDelayValue = TimeSpan.FromMilliseconds(4_294_967_294);
 
     private RetryPolicy(int maxRetries, TimeSpan baseDelay, TimeSpan maxDelay)
     {
@@ -40,6 +44,7 @@ internal sealed class RetryPolicy
     /// <see cref="RetryOptions.MaxRetries"/>, never silently take zero. A clobbered
     /// <c>MaxRetries</c> would be invisible until the first transient failure.
     /// </remarks>
+    /// <exception cref="HuurayConfigurationException">A delay is above 4294967294 milliseconds.</exception>
     internal static RetryPolicy Resolve(RetryOptions? options)
     {
         RetryOptions defaults = RetryOptions.Default;
@@ -47,6 +52,13 @@ internal sealed class RetryPolicy
         int maxRetries = options?.MaxRetries ?? defaults.MaxRetries!.Value;
         TimeSpan baseDelay = options?.BaseDelay ?? defaults.BaseDelay!.Value;
         TimeSpan maxDelay = options?.MaxDelay ?? defaults.MaxDelay!.Value;
+
+        // Task.Delay throws above 4294967294 ms, and the wait runs only after a first
+        // attempt has already been sent, so the limit is checked here, at construction.
+        // Every computed wait is at most MaxDelay; BaseDelay shares the limit so that one
+        // rule covers both.
+        CheckDelay(nameof(RetryOptions.BaseDelay), baseDelay);
+        CheckDelay(nameof(RetryOptions.MaxDelay), maxDelay);
 
         return new RetryPolicy(
             Math.Max(0, maxRetries),
@@ -63,8 +75,28 @@ internal sealed class RetryPolicy
     /// <summary>Exponential backoff with full jitter, so parallel clients do not resonate.</summary>
     internal TimeSpan BackoffDelay(int attempt)
     {
+        // From attempt 1024, 2^attempt is infinity, and zero times infinity is NaN,
+        // which TimeSpan refuses.
+        if (BaseDelay == TimeSpan.Zero)
+        {
+            return TimeSpan.Zero;
+        }
+
         double exponential = BaseDelay.TotalMilliseconds * Math.Pow(2, attempt);
         double capped = Math.Min(exponential, MaxDelay.TotalMilliseconds);
         return TimeSpan.FromMilliseconds(Random.Shared.NextDouble() * capped);
+    }
+
+    private static void CheckDelay(string name, TimeSpan delay)
+    {
+        if (delay > MaxDelayValue)
+        {
+            throw new HuurayConfigurationException(
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Retry.{0} must be at most 4294967294 milliseconds (about 49.7 days), received {1} ms.",
+                    name,
+                    delay.TotalMilliseconds));
+        }
     }
 }

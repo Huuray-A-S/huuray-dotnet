@@ -174,4 +174,39 @@ public class AuthHeaderTests
             Assert.DoesNotContain("super-secret", header.Value, StringComparison.Ordinal);
         }
     }
+
+    [Theory]
+    // The same rule HuurayClient applies at construction: a line break injects a header,
+    // a non-ASCII character fails the send after the fact, and a whitespace-only token
+    // arrives empty.
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("tok-sentinel\r\nX-Injected: yes")]
+    [InlineData("tok-sentinel\n")]
+    [InlineData("tok-sentinel\r")]
+    [InlineData("tok-sentinel\0")]
+    [InlineData("tok-sentinel\t")]
+    [InlineData("tok-sentinel\U0000007F")]
+    [InlineData("tok-sentinel\U00000085")]
+    [InlineData("tok-sentinel\U000000E4")]
+    public void RejectsATokenThatCannotBeSentAsAHeader_WithoutQuotingIt(string apiToken)
+    {
+        ArgumentException error = Assert.Throws<ArgumentException>(() =>
+            RequestSigner.BuildAuthHeaders(apiToken, "sec", "abc"));
+
+        Assert.Equal("apiToken", error.ParamName);
+        Assert.DoesNotContain("sentinel", error.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("X-Injected", error.ToString(), StringComparison.Ordinal);
+        Assert.Contains("X-API-TOKEN", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AcceptsATokenOfPrintableAsciiIncludingInnerSpaces()
+    {
+        const string token = "tok en !\"#$%&'()*+,-./09:;<=>?@AZ[\\]^_`az{|}~";
+
+        IReadOnlyDictionary<string, string> headers = RequestSigner.BuildAuthHeaders(token, "sec", "abc");
+
+        Assert.Equal(token, headers["X-API-TOKEN"]);
+    }
 }

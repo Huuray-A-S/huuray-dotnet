@@ -1,4 +1,5 @@
 using System;
+using System.Text;
 
 namespace Huuray;
 
@@ -26,6 +27,9 @@ public sealed record HuurayClientOptions
     public required string ApiSecret { get; init; }
 
     /// <summary>Override the API host. Defaults to <see cref="HuurayClient.DefaultBaseUrl"/>.</summary>
+    /// <remarks>
+    /// An absolute http(s) URL without user-info, a query or a fragment. A trailing slash is fine.
+    /// </remarks>
     public string? BaseUrl { get; init; }
 
     /// <summary>
@@ -61,4 +65,29 @@ public sealed record HuurayClientOptions
     /// and hard to trace.
     /// </remarks>
     public Func<string>? NonceFactory { get; init; }
+
+    /// <summary>
+    /// Writes the members for the record's <c>ToString</c>, with the credentials replaced.
+    /// </summary>
+    /// <remarks>
+    /// The compiler-generated version would print <see cref="ApiToken"/> and
+    /// <see cref="ApiSecret"/> in the clear, so logging the options would log both. Every
+    /// other member is printed as the compiler would print it.
+    /// </remarks>
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append("ApiToken = [redacted], ApiSecret = [redacted], BaseUrl = ");
+        builder.Append(BaseUrl);
+        builder.Append(", HashEncoding = ");
+        builder.Append(HashEncoding.ToString());
+        builder.Append(", Timeout = ");
+        builder.Append(Timeout.ToString());
+        builder.Append(", Retry = ");
+        builder.Append(Retry);
+        builder.Append(", UserAgent = ");
+        builder.Append(UserAgent);
+        builder.Append(", NonceFactory = ");
+        builder.Append(NonceFactory);
+        return true;
+    }
 }

@@ -93,10 +93,17 @@ public sealed class RecordingHandler : HttpMessageHandler
 
     public List<CapturedRequest> Calls { get; } = new();
 
+    /// <summary>
+    /// Every time the transport was handed a request, counted before anything can throw —
+    /// unlike <see cref="Calls"/>, which a cancelled body read never reaches.
+    /// </summary>
+    public int Invocations { get; private set; }
+
     protected override async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         CancellationToken cancellationToken)
     {
+        Invocations++;
         Uri url = request.RequestUri!;
 
         string? body = null;

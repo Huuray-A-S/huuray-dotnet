@@ -39,9 +39,11 @@ public sealed record RetryOptions
     public int? MaxRetries { get; init; }
 
     /// <summary>Base backoff delay; doubles per attempt, with full jitter. Default 250ms.</summary>
+    /// <remarks>At most 4294967294 milliseconds; a negative value counts as zero.</remarks>
     public TimeSpan? BaseDelay { get; init; }
 
     /// <summary>Ceiling for a single backoff wait. Default 4s.</summary>
+    /// <remarks>At most 4294967294 milliseconds; a negative value counts as zero.</remarks>
     public TimeSpan? MaxDelay { get; init; }
 
     /// <summary>The defaults, which are deliberately conservative.</summary>

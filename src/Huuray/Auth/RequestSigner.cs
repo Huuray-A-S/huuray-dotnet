@@ -106,8 +106,9 @@ public static class RequestSigner
     /// <returns>Exactly three headers: token, nonce, and hash.</returns>
     /// <exception cref="ArgumentNullException">Any argument is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">
-    /// <paramref name="nonce"/> is empty, longer than <see cref="NonceMaxLength"/>, or contains
-    /// anything but visible ASCII.
+    /// <paramref name="apiToken"/> is empty, only whitespace, or contains a control or non-ASCII
+    /// character; or <paramref name="nonce"/> is empty, longer than <see cref="NonceMaxLength"/>,
+    /// or contains anything but visible ASCII.
     /// </exception>
     public static IReadOnlyDictionary<string, string> BuildAuthHeaders(
         string apiToken,
@@ -118,6 +119,17 @@ public static class RequestSigner
         if (apiToken is null)
         {
             throw new ArgumentNullException(nameof(apiToken));
+        }
+
+        // The same rule HuurayClient applies at construction, for callers who sign
+        // requests themselves: a line break injects a header, and a whitespace-only token
+        // arrives empty once the receiver strips it. The value is never quoted.
+        if (string.IsNullOrWhiteSpace(apiToken) || apiToken.AsSpan().ContainsAnyExceptInRange(' ', '~'))
+        {
+            throw new ArgumentException(
+                "API token is empty, only whitespace, or contains a control character (a line break, tab, NUL or " +
+                "similar) or a non-ASCII character, and cannot be sent as the X-API-TOKEN header.",
+                nameof(apiToken));
         }
 
         if (nonce is null)

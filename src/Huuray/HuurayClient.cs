@@ -78,8 +78,10 @@ public sealed class HuurayClient
     /// <exception cref="HuurayConfigurationException">
     /// Credentials are missing, <see cref="HuurayClientOptions.ApiToken"/> or
     /// <see cref="HuurayClientOptions.UserAgent"/> holds a control or non-ASCII character,
-    /// <see cref="HuurayClientOptions.BaseUrl"/> is not an absolute http(s) URL of visible ASCII,
-    /// or <see cref="HuurayClientOptions.Timeout"/> is outside 1 to 4294967294 milliseconds.
+    /// <see cref="HuurayClientOptions.BaseUrl"/> is not an absolute http(s) URL of visible ASCII or
+    /// holds user-info, a query or a fragment, <see cref="HuurayClientOptions.Timeout"/> is outside
+    /// 1 to 4294967294 milliseconds, or a <see cref="HuurayClientOptions.Retry"/> delay is above
+    /// 4294967294 milliseconds.
     /// </exception>
     public HuurayClient(HuurayClientOptions options, HttpClient? httpClient = null)
     {
@@ -148,7 +150,29 @@ public sealed class HuurayClient
             || (parsedBaseUrl.Scheme != Uri.UriSchemeHttp && parsedBaseUrl.Scheme != Uri.UriSchemeHttps))
         {
             throw new HuurayConfigurationException(
-                $"BaseUrl \"{options.BaseUrl}\" is not an absolute http(s) URL. Expected something like \"{DefaultBaseUrl}\".");
+                $"BaseUrl is not an absolute http(s) URL. Expected something like \"{DefaultBaseUrl}\".");
+        }
+
+        // This client authenticates with headers, never user-info. The default HttpClient
+        // does not send user-info, but it would stay in every request URI, and a password
+        // in any message that quoted the URL. Uri reports none for "https://@host" and
+        // accepts backslashes after the scheme, so the authority is also checked as text.
+        // A query or fragment is refused because every path is appended after it:
+        // "https://host?x" + "/v4/Balance" requests "/" with the query "?x/v4/Balance",
+        // and after "#" the path becomes a fragment, which is never sent.
+        ReadOnlySpan<char> afterScheme = baseUrl.AsSpan(baseUrl.IndexOf(':') + 1).TrimStart("/\\");
+        int authorityLength = afterScheme.IndexOfAny("/\\?#");
+        ReadOnlySpan<char> authority = authorityLength < 0 ? afterScheme : afterScheme[..authorityLength];
+        if (parsedBaseUrl.UserInfo.Length > 0 || authority.Contains('@'))
+        {
+            throw new HuurayConfigurationException(
+                $"BaseUrl must not contain user-info (\"user@\" or \"user:password@\"). Expected something like \"{DefaultBaseUrl}\".");
+        }
+
+        if (baseUrl.AsSpan().ContainsAny('?', '#'))
+        {
+            throw new HuurayConfigurationException(
+                $"BaseUrl must not contain a query (\"?\") or a fragment (\"#\"). Expected something like \"{DefaultBaseUrl}\".");
         }
 
         // The range CancellationTokenSource.CancelAfter really honours. It truncates to
@@ -330,6 +354,10 @@ public sealed class HuurayClient
         Func<string, T?> parse,
         CancellationToken cancellationToken)
     {
+        // Nothing is signed or handed to the transport for a token that is already
+        // cancelled, whether the call is a read, a resend or a cancel.
+        cancellationToken.ThrowIfCancellationRequested();
+
         Uri uri = new(_baseUrl + path + (string.IsNullOrEmpty(query) ? string.Empty : "?" + query));
         string verb = method.Method;
 

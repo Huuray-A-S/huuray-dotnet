@@ -51,6 +51,9 @@ public sealed class OrdersResource
     /// is set without <see cref="CreateOrderRequest.TemplateId"/>.
     /// </exception>
     /// <exception cref="HuurayIndeterminateOrderException">The outcome of the order is unknown.</exception>
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken"/> was already cancelled, so nothing was sent.
+    /// </exception>
     /// <exception cref="HuurayApiException">The API definitively rejected the order.</exception>
     public async Task<CreateOrderResult> CreateAsync(
         CreateOrderRequest request,
@@ -88,6 +91,9 @@ public sealed class OrdersResource
     /// <see cref="CreateOrderRequest.PdfTemplateUid"/> is set without <see cref="CreateOrderRequest.TemplateId"/>.
     /// </exception>
     /// <exception cref="HuurayIndeterminateOrderException">The outcome of the order is unknown.</exception>
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken"/> was already cancelled, so nothing was sent.
+    /// </exception>
     /// <exception cref="HuurayApiException">The API definitively rejected the order.</exception>
     public async Task<CreateSyncOrderResult> CreateSyncAsync(
         CreateOrderRequest request,
@@ -133,6 +139,9 @@ public sealed class OrdersResource
     /// <exception cref="ArgumentNullException"><paramref name="request"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException"><see cref="SendRewardRequest.RefId"/> is empty.</exception>
     /// <exception cref="HuurayIndeterminateOrderException">The outcome of the order is unknown.</exception>
+    /// <exception cref="OperationCanceledException">
+    /// <paramref name="cancellationToken"/> was already cancelled, so nothing was sent.
+    /// </exception>
     /// <exception cref="HuurayApiException">The API definitively rejected the order.</exception>
     public Task<CreateOrderResult> SendRewardAsync(
         SendRewardRequest request,
@@ -419,6 +428,10 @@ public sealed class OrdersResource
         string? refId,
         CancellationToken cancellationToken)
     {
+        // A token cancelled before the send is plain cancellation: nothing has been sent,
+        // so the outcome is known and it must not surface as an order of unknown outcome.
+        cancellationToken.ThrowIfCancellationRequested();
+
         try
         {
             HuurayResponse<OrderResponseWire> response = await _client.SendAsync(

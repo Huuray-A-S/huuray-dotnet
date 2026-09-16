@@ -488,6 +488,47 @@ public class IndeterminateOrderTests
         Assert.Contains("Do NOT retry", error.Message, StringComparison.Ordinal);
     }
 
+    [Theory]
+    // A token cancelled before the call sends nothing, so the outcome is known: plain
+    // cancellation, not an order of unknown outcome.
+    [InlineData("create")]
+    [InlineData("createSync")]
+    [InlineData("sendReward")]
+    [InlineData("resend")]
+    [InlineData("cancel")]
+    [InlineData("search")]
+    public async Task AnAlreadyCancelledTokenSendsNothing_AndIsPlainCancellation(string method)
+    {
+        using CancellationTokenSource cts = new();
+        cts.Cancel();
+        TestHarness harness = Fake.Client(new MockResponse { Json = Fake.Json("{\"OrderUID\":\"x\",\"Vouchers\":[]}") });
+
+        Exception? error = await Record.ExceptionAsync(() => method switch
+        {
+            "create" => harness.Client.Orders.CreateAsync(OrdersTestData.Base with { RefId = "ref-pre" }, cts.Token),
+            "createSync" => harness.Client.Orders.CreateSyncAsync(OrdersTestData.Base with { RefId = "ref-pre" }, cts.Token),
+            "sendReward" => harness.Client.SendRewardAsync(
+                new SendRewardRequest
+                {
+                    ProductToken = "tok",
+                    Value = 5000,
+                    Currency = "DKK",
+                    Recipient = new Recipient { Email = "jane@example.com" },
+                    TemplateId = 42,
+                    RefId = "ref-pre",
+                },
+                cts.Token),
+            "resend" => harness.Client.Orders.ResendAsync(new ResendRequest { OrderUid = "x" }, cts.Token),
+            "cancel" => harness.Client.Orders.CancelAsync(new CancelRequest { OrderUid = "x" }, cts.Token),
+            "search" => harness.Client.Orders.SearchAsync(new SearchOrdersRequest { RefId = "ref-pre" }, cts.Token),
+            _ => throw new ArgumentOutOfRangeException(nameof(method), method, null),
+        });
+
+        Assert.IsAssignableFrom<OperationCanceledException>(error);
+        Assert.Equal(cts.Token, ((OperationCanceledException)error!).CancellationToken);
+        Assert.Equal(0, harness.Handler.Invocations);
+    }
+
     [Fact]
     public async Task ThrowsOnATimeoutThatFiresWhileTheResponseBodyStreams()
     {

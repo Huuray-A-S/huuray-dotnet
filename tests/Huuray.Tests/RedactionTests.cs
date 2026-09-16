@@ -1,4 +1,6 @@
 using System;
+using System.Globalization;
+using System.Text;
 using System.Text.Json.Nodes;
 using Xunit;
 
@@ -195,5 +197,53 @@ public class RecordToStringRedactionTests
         Assert.DoesNotContain("https://r/abc", rendered, StringComparison.Ordinal);
         Assert.DoesNotContain("jane@example.com", rendered, StringComparison.Ordinal);
         Assert.DoesNotContain("+4512345678", rendered, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ClientOptionsToStringRedactsTheCredentials_AndPrintsTheRestAsUsual()
+    {
+        // The compiler-generated record ToString printed ApiToken and ApiSecret in the clear.
+        HuurayClientOptions options = new()
+        {
+            ApiToken = "tok-live-sentinel",
+            ApiSecret = "secret-live-sentinel",
+            BaseUrl = "https://example.test",
+            UserAgent = "my-app/2.0",
+        };
+
+        Assert.Equal(
+            "HuurayClientOptions { ApiToken = [redacted], ApiSecret = [redacted], BaseUrl = https://example.test, " +
+            "HashEncoding = Hex, Timeout = 00:00:30, Retry = , UserAgent = my-app/2.0, NonceFactory =  }",
+            options.ToString());
+    }
+
+    [Fact]
+    public void ClientOptionsLeakNoCredentialThroughAnyFormattingPath()
+    {
+        HuurayClientOptions options = new()
+        {
+            ApiToken = "tok-live-sentinel",
+            ApiSecret = "secret-live-sentinel",
+            Retry = new RetryOptions { MaxRetries = 1 },
+            NonceFactory = () => "nonce",
+        };
+
+        StringBuilder appended = new StringBuilder().Append(options);
+        string[] renderings =
+        {
+            options.ToString(),
+            $"{options}",
+            string.Format(CultureInfo.InvariantCulture, "{0}", options),
+            appended.ToString(),
+            (options with { UserAgent = "copy" }).ToString(),
+            new { Options = options }.ToString()!,
+        };
+
+        foreach (string rendered in renderings)
+        {
+            Assert.DoesNotContain("sentinel", rendered, StringComparison.Ordinal);
+            Assert.Contains("ApiToken = [redacted], ApiSecret = [redacted]", rendered, StringComparison.Ordinal);
+            Assert.Contains("Retry = RetryOptions { MaxRetries = 1,", rendered, StringComparison.Ordinal);
+        }
     }
 }

@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ArgumentException` before the request. `HttpClient` wrote a line break straight onto
   the wire, injecting a header, and a non-ASCII character failed the send after the fact —
   on `/v4/Order` as `HuurayIndeterminateOrderException`, although nothing was sent.
+- **`RequestSigner.BuildAuthHeaders` checks the token as `HuurayClient` does.** An
+  `apiToken` that is empty, only whitespace, or holds a control or non-ASCII character
+  throws `ArgumentException`. A line break was returned inside the `X-API-TOKEN` value.
 - **`RequestAsync` rejects a path that does not start with `/` or holds anything but
   visible ASCII**, with `ArgumentException`, before signing. The path is appended to the
   base URL as text, so `@host/…`, `.host/…`, `:port/…` or `v4/…` sent the signed request
@@ -31,6 +34,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A `BaseUrl` with a space, control character or non-ASCII character** throws
   `HuurayConfigurationException` at construction. It was percent-encoded into the path,
   turned into an IDN host, or failed only at the first request.
+- **A `BaseUrl` with user-info (`user@` or `user:password@`), a query (`?`) or a fragment
+  (`#`)** throws `HuurayConfigurationException` at construction. The default `HttpClient`
+  did not send user-info, but it stayed in every request URI. The path is appended as
+  text, so `https://host?x` requested `/?x/v4/Balance` and `https://host#x` requested `/`.
+  A trailing slash is still accepted.
+- **Retry delays must be at most 4294967294 milliseconds**: a larger
+  `RetryOptions.BaseDelay` or `MaxDelay` throws `HuurayConfigurationException` at
+  construction. With both set to `TimeSpan.MaxValue`, the wait before the first retry threw
+  `ArgumentOutOfRangeException` after the first attempt had been sent. A zero `BaseDelay`
+  with `MaxRetries` above 1024 threw `ArgumentException` before retry 1025; that wait is
+  now zero.
+- **A call with an already-cancelled `CancellationToken` throws
+  `OperationCanceledException`** before anything is signed or handed to the `HttpClient`.
+  `CreateAsync`, `CreateSyncAsync` and `SendRewardAsync` reported it as
+  `HuurayIndeterminateOrderException`, although nothing was sent; every other call already
+  threw `OperationCanceledException`, but only after handing the request to the
+  `HttpClient`.
+- **`HuurayClientOptions.ToString()` prints `ApiToken = [redacted]` and
+  `ApiSecret = [redacted]`.** The compiler-generated record `ToString` printed both in the
+  clear. Every other member prints as before.
 - None of the header, path or base URL messages quotes the rejected value.
 
 ### Documentation

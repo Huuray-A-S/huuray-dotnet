@@ -31,10 +31,75 @@ public class ConstructionTests
     [InlineData("v4")]
     [InlineData("file:///etc/passwd")]
     [InlineData("ftp://example.test")]
-    public void RejectsABaseUrlThatIsNotAbsoluteHttp(string baseUrl)
+    [InlineData("ftp://user:pw-sentinel@example.test")]
+    public void RejectsABaseUrlThatIsNotAbsoluteHttp_WithoutQuotingIt(string baseUrl)
     {
-        Assert.Throws<HuurayConfigurationException>(() =>
+        HuurayConfigurationException error = Assert.Throws<HuurayConfigurationException>(() =>
             new HuurayClient(new HuurayClientOptions { ApiToken = "t", ApiSecret = "s", BaseUrl = baseUrl }));
+
+        AssertNotQuoted(error, baseUrl);
+        Assert.Contains("not an absolute http(s) URL", error.Message, StringComparison.Ordinal);
+        Assert.Contains(HuurayClient.DefaultBaseUrl, error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    // User-info stays in every request URI, and a message quoting the URL would leak the
+    // password. Uri reports no user-info for "https://@host", and accepts backslashes
+    // after the scheme.
+    [InlineData("https://user-sentinel@example.test")]
+    [InlineData("https://user-sentinel:pw-sentinel@example.test")]
+    [InlineData("https://user-sentinel:pw-sentinel@example.test/")]
+    [InlineData("https://user-sentinel:pw-sentinel@example.test/base")]
+    [InlineData("http://user-sentinel:pw-sentinel@[::1]:8080")]
+    [InlineData("https:\\\\user-sentinel:pw-sentinel@example.test")]
+    [InlineData("https://example.test:8443@other-sentinel.test")]
+    [InlineData("https://@example.test")]
+    [InlineData("https://:@example.test")]
+    public void RejectsABaseUrlWithUserInfo_WithoutQuotingIt(string baseUrl)
+    {
+        HuurayConfigurationException error = Assert.Throws<HuurayConfigurationException>(() =>
+            new HuurayClient(new HuurayClientOptions { ApiToken = "t", ApiSecret = "s", BaseUrl = baseUrl }));
+
+        AssertNotQuoted(error, baseUrl);
+        Assert.Contains("must not contain user-info", error.Message, StringComparison.Ordinal);
+        Assert.Contains(HuurayClient.DefaultBaseUrl, error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    // Every path is appended after the query or fragment, so each request would go to
+    // the base path instead.
+    [InlineData("https://example.test?q-sentinel=1")]
+    [InlineData("https://example.test/?q-sentinel")]
+    [InlineData("https://example.test/base?q-sentinel")]
+    [InlineData("https://example.test?")]
+    [InlineData("https://example.test?/")]
+    [InlineData("https://example.test?x@y-sentinel")]
+    [InlineData("https://example.test#f-sentinel")]
+    [InlineData("https://example.test/base#")]
+    public void RejectsABaseUrlWithAQueryOrFragment_WithoutQuotingIt(string baseUrl)
+    {
+        HuurayConfigurationException error = Assert.Throws<HuurayConfigurationException>(() =>
+            new HuurayClient(new HuurayClientOptions { ApiToken = "t", ApiSecret = "s", BaseUrl = baseUrl }));
+
+        AssertNotQuoted(error, baseUrl);
+        Assert.Contains("must not contain a query", error.Message, StringComparison.Ordinal);
+        Assert.Contains(HuurayClient.DefaultBaseUrl, error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    // "@" after the host is part of the path, not user-info.
+    [InlineData("https://example.test/", "https://example.test", "/v4/Balance")]
+    [InlineData("https://example.test/base/", "https://example.test", "/base/v4/Balance")]
+    [InlineData("https://example.test/a@b/", "https://example.test", "/a@b/v4/Balance")]
+    [InlineData("http://[::1]:8080/", "http://[::1]:8080", "/v4/Balance")]
+    public async Task StillAcceptsATrailingSlashAndAnAtSignInThePath(string baseUrl, string origin, string path)
+    {
+        TestHarness harness = Fake.Client(new MockResponse { Json = Fake.Json("{\"Balances\":[]}") }, baseUrl: baseUrl);
+
+        await harness.Client.Balances.ListAsync();
+
+        Assert.Equal(origin, harness.First.Origin);
+        Assert.Equal(path, harness.First.Path);
     }
 
     [Theory]
@@ -150,7 +215,7 @@ public class ConstructionTests
         HuurayConfigurationException error = Assert.Throws<HuurayConfigurationException>(() =>
             new HuurayClient(new HuurayClientOptions { ApiToken = "t", ApiSecret = "s", BaseUrl = baseUrl }));
 
-        Assert.DoesNotContain(baseUrl, error.Message, StringComparison.Ordinal);
+        AssertNotQuoted(error, baseUrl);
         Assert.DoesNotContain("X-Injected", error.Message, StringComparison.Ordinal);
     }
 
@@ -199,6 +264,22 @@ public class ConstructionTests
         });
 
         Assert.NotNull(client);
+    }
+
+    /// <summary>
+    /// Neither the message, nor <see cref="Exception.ToString"/>, nor any inner exception
+    /// carries the rejected value or a "-sentinel" part of it.
+    /// </summary>
+    private static void AssertNotQuoted(Exception error, string value)
+    {
+        for (Exception? current = error; current is not null; current = current.InnerException)
+        {
+            foreach (string text in new[] { current.Message, current.ToString() })
+            {
+                Assert.DoesNotContain(value, text, StringComparison.Ordinal);
+                Assert.DoesNotContain("sentinel", text, StringComparison.Ordinal);
+            }
+        }
     }
 }
 
@@ -462,6 +543,64 @@ public class RetryPolicyTests
         RetryPolicy policy = RetryPolicy.Resolve(new RetryOptions { MaxRetries = -3 });
 
         Assert.Equal(0, policy.MaxRetries);
+    }
+
+    [Theory]
+    // Task.Delay throws ArgumentOutOfRangeException above 4294967294 ms, and it ran only
+    // after the first attempt had already been sent.
+    [InlineData("BaseDelay", 42_949_672_950_000L)]
+    [InlineData("MaxDelay", 42_949_672_950_000L)]
+    [InlineData("BaseDelay", long.MaxValue)]
+    [InlineData("MaxDelay", long.MaxValue)]
+    public void RejectsARetryDelayTaskDelayCannotHonour_AtConstruction(string property, long ticks)
+    {
+        TimeSpan delay = TimeSpan.FromTicks(ticks);
+        RetryOptions retry = property == "BaseDelay"
+            ? new RetryOptions { BaseDelay = delay }
+            : new RetryOptions { MaxDelay = delay };
+
+        HuurayConfigurationException error = Assert.Throws<HuurayConfigurationException>(() =>
+            new HuurayClient(new HuurayClientOptions { ApiToken = "t", ApiSecret = "s", Retry = retry }));
+
+        Assert.Contains("Retry." + property + " must be at most 4294967294 milliseconds", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AcceptsTheLongestRetryDelays_AndStillRetries()
+    {
+        TestHarness harness = Fake.ClientWithQueue(
+            new[]
+            {
+                new MockResponse { Status = 503 },
+                new MockResponse { Status = 200, Json = Fake.Json("{\"Balances\":[]}") },
+            },
+            retry: new RetryOptions
+            {
+                MaxRetries = 1,
+                BaseDelay = TimeSpan.FromTicks(1),
+                MaxDelay = TimeSpan.FromMilliseconds(4_294_967_294),
+            });
+
+        await harness.Client.Balances.ListAsync();
+
+        Assert.Equal(2, harness.Calls.Count);
+        Assert.Equal(
+            TimeSpan.FromMilliseconds(4_294_967_294),
+            RetryPolicy.Resolve(new RetryOptions { BaseDelay = TimeSpan.FromMilliseconds(4_294_967_294) }).BaseDelay);
+    }
+
+    [Theory]
+    // From attempt 1024, 2^attempt is infinity, and zero times infinity is NaN, which
+    // TimeSpan.FromMilliseconds refuses.
+    [InlineData(0L)]
+    [InlineData(-10_000L)]
+    public void BacksOffZeroForAZeroBaseDelay_AtAnyAttempt(long baseDelayTicks)
+    {
+        RetryPolicy policy = RetryPolicy.Resolve(new RetryOptions { BaseDelay = TimeSpan.FromTicks(baseDelayTicks) });
+
+        Assert.Equal(TimeSpan.Zero, policy.BackoffDelay(0));
+        Assert.Equal(TimeSpan.Zero, policy.BackoffDelay(1024));
+        Assert.Equal(TimeSpan.Zero, policy.BackoffDelay(int.MaxValue - 1));
     }
 
     [Fact]
