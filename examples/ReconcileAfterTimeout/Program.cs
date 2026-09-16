@@ -67,8 +67,8 @@ catch (HuurayIndeterminateOrderException)
     }
     catch (HuurayNotFoundException)
     {
-        // The API signals an empty result set with 404 — its way of saying no order
-        // matched. That IS the answer: the order did not land.
+        // The API answers 404 when no order matched. That IS the answer: the order
+        // did not land.
         Console.WriteLine("No order exists for this RefId (404). Safe to send again with the same RefId.");
         return 0;
     }

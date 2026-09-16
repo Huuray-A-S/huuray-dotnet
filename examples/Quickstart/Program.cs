@@ -70,7 +70,8 @@ CheckStockResult stock = await huuray.Stock.CheckAsync(new CheckStockRequest
 Console.WriteLine($"Stock: {stock.Stock?.ToString(CultureInfo.InvariantCulture) ?? "unknown"}");
 
 // 4. How would it be delivered? Templates are the emails and texts recipients get.
-//    An account with none gets a 404, not an empty list.
+//    Handle both outcomes observed live: a 404 when the account had no templates,
+//    and an empty Templates list when it had only PDF templates.
 Console.WriteLine();
 try
 {

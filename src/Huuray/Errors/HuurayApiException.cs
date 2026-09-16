@@ -172,10 +172,11 @@ public sealed class HuurayAuthException : HuurayApiException
 /// HTTP 404 — the order, voucher, or product was not found.
 /// </summary>
 /// <remarks>
-/// The API signals an <em>empty result set</em> this way rather than with an empty
-/// <c>200</c> — observed live on <c>POST /v4/Template</c>, which answers
-/// <c>404 "There were no active templates"</c>. So a 404 from <c>POST /v4/Search</c>
-/// means "no order matched", which during reconciliation reads as "the order did not land".
+/// The API can signal <em>nothing found</em> this way rather than with an empty
+/// <c>200</c> — observed live on <c>POST /v4/Template</c>, which answered
+/// <c>404 "There were no active templates"</c> for an account with no templates. So a
+/// 404 from <c>POST /v4/Search</c> means "no order matched", which during reconciliation
+/// reads as "the order did not land".
 /// </remarks>
 public sealed class HuurayNotFoundException : HuurayApiException
 {

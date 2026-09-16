@@ -24,13 +24,14 @@ public sealed class TemplatesResource
     /// <c>POST /v4/Template</c>. The endpoint declares no request body in the API
     /// specification, so this client sends none — confirmed accepted by the live API.
     /// <para>
-    /// When the account has <strong>no active templates</strong>, the API answers
-    /// <c>404 "There were no active templates"</c> rather than an empty list, so this
-    /// method throws <see cref="HuurayNotFoundException"/> in that case. Catch it and
-    /// read it as "no templates exist".
+    /// Handle both outcomes observed live: an account with no templates got
+    /// <c>404 "There were no active templates"</c>, which this method throws as
+    /// <see cref="HuurayNotFoundException"/>, and an account with PDF templates but no
+    /// email or SMS templates got <c>200</c> with an empty
+    /// <see cref="ListTemplatesResult.Templates"/> list.
     /// </para>
     /// </remarks>
-    /// <exception cref="HuurayNotFoundException">The account has no active templates.</exception>
+    /// <exception cref="HuurayNotFoundException">The API answered 404, as observed when the account had no templates.</exception>
     /// <exception cref="HuurayApiException">The API returned another non-2xx response.</exception>
     /// <exception cref="HuurayConnectionException">The request never completed, or the response was unusable.</exception>
     public async Task<ListTemplatesResult> ListAsync(CancellationToken cancellationToken = default)

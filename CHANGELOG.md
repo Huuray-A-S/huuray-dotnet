@@ -30,10 +30,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   negative value or `Timeout.InfiniteTimeSpan` was silently replaced with 30 seconds.
 - None of the header, path or base URL messages quotes the rejected value.
 
-### Confirmed against the live API (2026-08-15)
+### Documentation
 
-Every assumption the specification left open has been verified with real calls, made
-through the reference implementation of this SDK:
+- The README no longer invites pull requests, which this repository does not accept.
+- The recipient-count check is documented as applying only when `TemplateId` is set,
+  which is what the code does.
+- `Templates.ListAsync()` docs and the Quickstart cover both outcomes observed live: a 404
+  for an account with no templates, and an empty `Templates` list for one with only PDF
+  templates.
+- The spec-drift workflow is described as it behaves: with pull requests disabled, a
+  detected change pushes the `spec-drift` branch and fails the run.
+
+### Confirmed against the live API
+
+Every assumption the specification left open has been verified with real calls, made on
+2026-08-15 through the reference implementation of this SDK unless a bullet gives another
+date:
 
 - **`X-API-HASH` encoding is lowercase hex** — authenticated against `GET /v4/Balance`;
   the other three candidate encodings return 401. The default is pinned by a test;
@@ -42,9 +54,12 @@ through the reference implementation of this SDK:
 - **`POST /v4/Template` accepts a bodyless request**, as the spec implies.
 - **The full order loop works end to end**: Balance → sync Order (quantity 1, no
   delivery) → Search by `RefID` (matched) → Cancel (full) → Balance.
-- **An empty result set is signalled as HTTP 404**, not as an empty 200 — observed live on
-  `/v4/Template` ("There were no active templates"). This is why the reconciliation
-  examples treat `HuurayNotFoundException` from `/v4/Search` as "the order did not land".
+- **`POST /v4/Template` answered HTTP 404** ("There were no active templates"), not an
+  empty 200, for an account with no templates. This is why the reconciliation examples
+  treat `HuurayNotFoundException` from `/v4/Search` as "the order did not land".
+- **`POST /v4/Template` answered HTTP 200 with an empty `Templates` list** for an account
+  with 37 PDF templates and no email or SMS templates — observed live 2026-09-16. So
+  `Templates.ListAsync()` can throw `HuurayNotFoundException` or return an empty list.
 
 ## [0.1.0] — unreleased
 
@@ -104,8 +119,8 @@ First release. Complete coverage of the Huuray API v4.
   against its schema). The validator fails closed on schema shapes it does not understand.
 - A mechanical inventory pins the public method list, so a new method cannot bypass the
   gates by not being exercised.
-- A weekly spec-drift job re-downloads the live specification and opens a pull request on
-  any change.
+- A weekly spec-drift job re-downloads the live specification and fails on any change:
+  pull requests are disabled on this repository.
 - No test makes a live API call.
 
 [Unreleased]: https://github.com/Huuray-A-S/huuray-dotnet/compare/v0.1.0...HEAD

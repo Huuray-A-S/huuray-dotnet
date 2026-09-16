@@ -58,7 +58,7 @@ The validator in `Spec.Validate` **fails closed**. A schema shape it does not un
 
 ## The vendored specification
 
-`openapi/huuray-v4.json` is the source of truth and is vendored deliberately. A scheduled workflow re-downloads it weekly and opens a pull request if it changed, which is how we find out about API changes. Review every one of those pull requests; do not merge on green alone.
+`openapi/huuray-v4.json` is the source of truth and is vendored deliberately. A scheduled workflow re-downloads it weekly and flags any change: pull requests are disabled on this repository, so when the specification changed the run pushes the new file to the `spec-drift` branch and then fails. That is how we find out about API changes. Review every one of those changes; do not merge on green alone.
 
 ## Tests
 

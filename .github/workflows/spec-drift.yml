@@ -1,10 +1,12 @@
 name: Spec drift
 
-# Re-downloads the live v4 specification and opens a pull request if it changed.
+# Re-downloads the live v4 specification and flags any change. Pull requests are
+# disabled on this repository, so when the spec changed the "Open a pull request" step
+# pushes the spec-drift branch and then fails, and so does the run.
 #
 # This is the early-warning system for API changes: because the conformance gates are
 # checked against the vendored spec, a diff here is the first sign that a field, an
-# endpoint, or a schema moved. Review every one of these PRs — do not merge on green alone.
+# endpoint, or a schema moved. Review every one of these changes — do not merge on green alone.
 
 on:
   schedule:
@@ -55,8 +57,9 @@ jobs:
           # write). Two reasons the default token is not enough: org repos block
           # Actions-created PRs unless a setting is flipped, and PRs opened with
           # GITHUB_TOKEN trigger no ci.yml run at all — the drift PR would show zero
-          # checks. Falls back to GITHUB_TOKEN so the workflow still functions before
-          # the secret exists.
+          # checks. Falls back to GITHUB_TOKEN. Pull requests are disabled on this
+          # repository, so with either token a detected change pushes the branch and
+          # then fails this step, and the run.
           token: ${{ secrets.SPEC_DRIFT_TOKEN || github.token }}
           branch: spec-drift
           title: 'The Huuray v4 specification changed'

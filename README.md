@@ -227,19 +227,19 @@ This client never logs a code. `Voucher.ToString()` redacts them, so an accident
 logger.LogInformation("order complete {Payload}", Redaction.RedactJson(json));   // codes stripped
 ```
 
-### 6. An empty result is a 404, not an empty list
+### 6. "Nothing found" can be a 404, not an empty list
 
-The API signals "nothing found" as HTTP 404 with a message like *"There were no active templates"* — so `Templates.ListAsync()` on an account with no templates, or `Orders.SearchAsync()` with no match, throws `HuurayNotFoundException` rather than returning an empty list. Catch it and read it as "none exist":
+The API can signal "nothing found" as HTTP 404: `Orders.SearchAsync()` with no match throws `HuurayNotFoundException` rather than returning an empty result. `POST /v4/Template` has been observed live both ways (see [CHANGELOG](CHANGELOG.md)): a 404 (*"There were no active templates"*) when the account had no templates, which `Templates.ListAsync()` throws as `HuurayNotFoundException`, and a 200 with an empty `Templates` list for an account with PDF templates but no email or SMS templates. Handle both:
 
 ```csharp
 IReadOnlyList<Template> templates = Array.Empty<Template>();
 try
 {
-    templates = (await huuray.Templates.ListAsync()).Templates;
+    templates = (await huuray.Templates.ListAsync()).Templates;   // can be empty
 }
 catch (HuurayNotFoundException)
 {
-    // 404 -> none exist
+    // the 404 observed when the account had no templates
 }
 ```
 
@@ -309,7 +309,7 @@ Every exception derives from `HuurayException`.
 
 API exceptions carry `HttpStatus`, `Status`, `StatusMessage`, and the parsed `Body`. The client reads `StatusMessage` and falls back to the deprecated `Message`. The retained `Body` is redacted, so logging an exception can never leak a voucher code.
 
-Argument problems that this client catches before anything is sent — a fractional amount, a recipient count that is neither 1 nor `Quantity`, a synchronous order over 25 — throw `ArgumentException`. They are programming mistakes, not API responses.
+Argument problems that this client catches before anything is sent — a fractional amount, a recipient count that is neither 1 nor `Quantity` when `TemplateId` is set, a synchronous order over 25 — throw `ArgumentException`. They are programming mistakes, not API responses.
 
 ## Client options
 
@@ -358,7 +358,7 @@ huuray --help
 
 ## Feedback
 
-Found a bug, or something in this library that could be friendlier? Please [file an issue](https://github.com/Huuray-A-S/huuray-dotnet/issues) or open a pull request.
+Found a bug, or something in this library that could be friendlier? Please [file an issue](https://github.com/Huuray-A-S/huuray-dotnet/issues) or start a [discussion](https://github.com/Huuray-A-S/huuray-dotnet/discussions). This repository does not accept external pull requests — see [CONTRIBUTING.md](.github/CONTRIBUTING.md) for why.
 
 For the API itself, your account, or a live production problem, contact your Huuray representative — see [SUPPORT.md](.github/SUPPORT.md) for which channel to use. Never open a public issue for a security vulnerability; see [SECURITY.md](.github/SECURITY.md).
 
