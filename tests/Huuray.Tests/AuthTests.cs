@@ -65,6 +65,37 @@ public class NonceTests
 
         Assert.Throws<ArgumentException>(() => RequestSigner.BuildAuthHeaders("t", "s", hex64));
     }
+
+    [Theory]
+    // A line break injects a header, a non-ASCII character fails the send after the
+    // fact, a space at either end is stripped by the receiver although the hash covers
+    // it, and an empty nonce sends a blank X-API-NONCE.
+    [InlineData("")]
+    [InlineData("sentinel\r\nX-Injected: yes")]
+    [InlineData("sentinel\n")]
+    [InlineData("sentinel\0")]
+    [InlineData("sentinel\t")]
+    [InlineData("senti nel")]
+    [InlineData(" sentinel")]
+    [InlineData("sentinel\U0000007F")]
+    [InlineData("sentinel\U000000E4")]
+    public void RejectsACustomNonceThatIsEmptyOrNotVisibleAscii_WithoutQuotingIt(string nonce)
+    {
+        ArgumentException error = Assert.Throws<ArgumentException>(() =>
+            RequestSigner.BuildAuthHeaders("t", "s", nonce));
+
+        Assert.DoesNotContain("sentinel", error.Message, StringComparison.Ordinal);
+        Assert.Contains("visible ASCII", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AcceptsEveryVisibleAsciiCharacterInANonce()
+    {
+        IReadOnlyDictionary<string, string> headers =
+            RequestSigner.BuildAuthHeaders("t", "s", "!\"#$%&'()*+,-./09:;<=>?@AZ[\\]^_`az{|}~");
+
+        Assert.Equal(3, headers.Count);
+    }
 }
 
 public class SigningTests

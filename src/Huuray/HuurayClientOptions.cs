@@ -16,7 +16,10 @@ namespace Huuray;
 /// </example>
 public sealed record HuurayClientOptions
 {
-    /// <summary>Your API token. Sent as <c>X-API-TOKEN</c>.</summary>
+    /// <summary>
+    /// Your API token. Sent as <c>X-API-TOKEN</c>, so it must not contain a control or
+    /// non-ASCII character — trim a value read from a file.
+    /// </summary>
     public required string ApiToken { get; init; }
 
     /// <summary>Your API secret. Used to sign each request; never sent, and never logged.</summary>
@@ -33,7 +36,7 @@ public sealed record HuurayClientOptions
     /// </remarks>
     public HashEncoding HashEncoding { get; init; } = RequestSigner.DefaultHashEncoding;
 
-    /// <summary>Per-request timeout. Default 30 seconds.</summary>
+    /// <summary>Per-request timeout, from 1 to 4294967294 milliseconds. Default 30 seconds.</summary>
     public TimeSpan Timeout { get; init; } = TimeSpan.FromSeconds(30);
 
     /// <summary>
@@ -41,17 +44,21 @@ public sealed record HuurayClientOptions
     /// </summary>
     public RetryOptions? Retry { get; init; }
 
-    /// <summary>Appended to the <c>User-Agent</c>, for example your app name and version.</summary>
+    /// <summary>
+    /// Appended to the <c>User-Agent</c>, for example your app name and version. Must not
+    /// contain a control or non-ASCII character.
+    /// </summary>
     public string? UserAgent { get; init; }
 
     /// <summary>
     /// Supply your own nonce.
     /// </summary>
     /// <remarks>
-    /// Must be unique per request, unused for 60 days, and at most
-    /// <see cref="RequestSigner.NonceMaxLength"/> characters. The default — 24 random
-    /// bytes as base64url — is right for almost everyone. Avoid timestamps: they collide
-    /// under concurrency and the resulting 401s are intermittent and hard to trace.
+    /// Must be unique per request, unused for 60 days, and 1 to
+    /// <see cref="RequestSigner.NonceMaxLength"/> characters of visible ASCII. The
+    /// default — 24 random bytes as base64url — is right for almost everyone. Avoid
+    /// timestamps: they collide under concurrency and the resulting 401s are intermittent
+    /// and hard to trace.
     /// </remarks>
     public Func<string>? NonceFactory { get; init; }
 }

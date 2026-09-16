@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **Header values are checked before anything is sent.** An `ApiToken` or `UserAgent`
+  containing a control character (line break, tab, NUL, DEL) or a non-ASCII character
+  throws `HuurayConfigurationException` at construction, and a whitespace-only `ApiToken`
+  counts as missing. A custom nonce that is empty or not visible ASCII throws
+  `ArgumentException` before the request. `HttpClient` wrote a line break straight onto
+  the wire, injecting a header, and a non-ASCII character failed the send after the fact —
+  on `/v4/Order` as `HuurayIndeterminateOrderException`, although nothing was sent.
+- **`RequestAsync` rejects a path that does not start with `/` or holds anything but
+  visible ASCII**, with `ArgumentException`, before signing. The path is appended to the
+  base URL as text, so `@host/…`, `.host/…`, `:port/…` or `v4/…` sent the signed request
+  to another host or port.
+- **A `BaseUrl` with a space, control character or non-ASCII character** throws
+  `HuurayConfigurationException` at construction. It was percent-encoded into the path,
+  turned into an IDN host, or failed only at the first request.
+- **`Timeout` must be between 1 and 4294967294 milliseconds**, the range
+  `CancellationTokenSource.CancelAfter` honours; anything else throws
+  `HuurayConfigurationException` at construction. A sub-millisecond timeout fired at once,
+  a longer one threw `ArgumentOutOfRangeException` at the first request, and zero, a
+  negative value or `Timeout.InfiniteTimeSpan` was silently replaced with 30 seconds.
+- None of the header, path or base URL messages quotes the rejected value.
+
 ### Confirmed against the live API (2026-08-15)
 
 Every assumption the specification left open has been verified with real calls, made

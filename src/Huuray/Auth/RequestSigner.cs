@@ -101,11 +101,14 @@ public static class RequestSigner
     /// </summary>
     /// <param name="apiToken">Your API token.</param>
     /// <param name="apiSecret">Your API secret. Used to sign; never placed in a header.</param>
-    /// <param name="nonce">A fresh nonce, at most <see cref="NonceMaxLength"/> characters.</param>
+    /// <param name="nonce">A fresh nonce, 1 to <see cref="NonceMaxLength"/> characters of visible ASCII.</param>
     /// <param name="encoding">Digest encoding. Defaults to <see cref="DefaultHashEncoding"/>.</param>
     /// <returns>Exactly three headers: token, nonce, and hash.</returns>
     /// <exception cref="ArgumentNullException">Any argument is <see langword="null"/>.</exception>
-    /// <exception cref="ArgumentException"><paramref name="nonce"/> is longer than <see cref="NonceMaxLength"/>.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="nonce"/> is empty, longer than <see cref="NonceMaxLength"/>, or contains
+    /// anything but visible ASCII.
+    /// </exception>
     public static IReadOnlyDictionary<string, string> BuildAuthHeaders(
         string apiToken,
         string apiSecret,
@@ -127,6 +130,18 @@ public static class RequestSigner
             throw new ArgumentException(
                 $"Nonce is {nonce.Length} characters; the Huuray API accepts at most {NonceMaxLength}. " +
                 "If you supplied a custom NonceFactory, shorten its output.",
+                nameof(nonce));
+        }
+
+        // HttpClient writes this header byte for byte: a line break injects another
+        // header, and a non-ASCII character fails the send after the fact. A space at
+        // either end is stripped by the receiver although the hash covers it, and an
+        // empty value sends a blank X-API-NONCE. The value is never quoted.
+        if (nonce.Length == 0 || nonce.AsSpan().ContainsAnyExceptInRange('!', '~'))
+        {
+            throw new ArgumentException(
+                "Nonce is empty or contains a character outside visible ASCII (0x21-0x7E), such as a space, a line " +
+                "break or a non-ASCII character. If you supplied a custom NonceFactory, make it return visible ASCII only.",
                 nameof(nonce));
         }
 

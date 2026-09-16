@@ -49,6 +49,9 @@ public sealed class HuurayClient
     /// </remarks>
     public const string DefaultBaseUrl = "https://api.huuray.com";
 
+    /// <summary>The longest timeout <see cref="CancellationTokenSource.CancelAfter(TimeSpan)"/> accepts.</summary>
+    private static readonly TimeSpan MaxTimeout = TimeSpan.FromMilliseconds(4_294_967_294);
+
     private static readonly Lazy<HttpClient> SharedHttpClient =
         new(CreateDefaultHttpClient, LazyThreadSafetyMode.ExecutionAndPublication);
 
@@ -73,7 +76,10 @@ public sealed class HuurayClient
     /// </param>
     /// <exception cref="ArgumentNullException"><paramref name="options"/> is <see langword="null"/>.</exception>
     /// <exception cref="HuurayConfigurationException">
-    /// Credentials are missing, or <see cref="HuurayClientOptions.BaseUrl"/> is not an absolute URL.
+    /// Credentials are missing, <see cref="HuurayClientOptions.ApiToken"/> or
+    /// <see cref="HuurayClientOptions.UserAgent"/> holds a control or non-ASCII character,
+    /// <see cref="HuurayClientOptions.BaseUrl"/> is not an absolute http(s) URL of visible ASCII,
+    /// or <see cref="HuurayClientOptions.Timeout"/> is outside 1 to 4294967294 milliseconds.
     /// </exception>
     public HuurayClient(HuurayClientOptions options, HttpClient? httpClient = null)
     {
@@ -82,7 +88,9 @@ public sealed class HuurayClient
             throw new ArgumentNullException(nameof(options));
         }
 
-        if (string.IsNullOrEmpty(options.ApiToken))
+        // A token of only whitespace counts as missing: a receiver strips whitespace from
+        // both ends of a header value, so the request would carry an empty X-API-TOKEN.
+        if (string.IsNullOrWhiteSpace(options.ApiToken))
         {
             throw new HuurayConfigurationException(
                 "ApiToken is required. Pass it explicitly, for example from the HUURAY_API_TOKEN environment variable.");
@@ -94,8 +102,38 @@ public sealed class HuurayClient
                 "ApiSecret is required. Pass it explicitly, for example from the HUURAY_API_SECRET environment variable.");
         }
 
+        // Rejected, never trimmed, and never quoted. Headers are added without
+        // validation, and HttpClient then writes them byte for byte: a line break
+        // injects a header on the wire, and a non-ASCII character fails the send after
+        // the fact — which on /v4/Order reads as an order of unknown outcome although
+        // nothing was sent. The secret is not checked because it is never sent.
+        if (options.ApiToken.AsSpan().ContainsAnyExceptInRange(' ', '~'))
+        {
+            throw new HuurayConfigurationException(
+                "ApiToken contains a control character (a line break, tab, NUL or similar) or a non-ASCII character " +
+                "and cannot be sent as the X-API-TOKEN header. A value read from a file often ends in a newline; trim it first.");
+        }
+
+        if (options.UserAgent is not null && options.UserAgent.AsSpan().ContainsAnyExceptInRange(' ', '~'))
+        {
+            throw new HuurayConfigurationException(
+                "UserAgent contains a control character (a line break, tab, NUL or similar) or a non-ASCII character " +
+                "and cannot be sent as the User-Agent header.");
+        }
+
         // An unset environment variable arrives as an empty string more often than as
         // null, and silently sending to "" would be a confusing failure.
+        //
+        // Anything else must be visible ASCII, checked before parsing and not quoted:
+        // Uri percent-encodes a space or control character into the path, turns a
+        // non-ASCII host into an IDN host, and trims a trailing line break that then
+        // breaks the first request.
+        if (!string.IsNullOrWhiteSpace(options.BaseUrl) && options.BaseUrl.AsSpan().ContainsAnyExceptInRange('!', '~'))
+        {
+            throw new HuurayConfigurationException(
+                $"BaseUrl contains a space, control character or non-ASCII character. Expected something like \"{DefaultBaseUrl}\".");
+        }
+
         string baseUrl = (string.IsNullOrWhiteSpace(options.BaseUrl) ? DefaultBaseUrl : options.BaseUrl)
             .TrimEnd('/');
         // The scheme check is not decoration. UriKind.Absolute alone is
@@ -113,11 +151,27 @@ public sealed class HuurayClient
                 $"BaseUrl \"{options.BaseUrl}\" is not an absolute http(s) URL. Expected something like \"{DefaultBaseUrl}\".");
         }
 
+        // The range CancellationTokenSource.CancelAfter really honours. It truncates to
+        // whole milliseconds, so a sub-millisecond timeout fires at once and every order
+        // would report an unknown outcome; above 4294967294 ms it throws, but only at the
+        // first request. Zero, negative and InfiniteTimeSpan are refused rather than
+        // replaced: a request without a timeout can hang forever, and an order that never
+        // returns can never be reconciled.
+        if (options.Timeout < TimeSpan.FromMilliseconds(1) || options.Timeout > MaxTimeout)
+        {
+            throw new HuurayConfigurationException(
+                string.Format(
+                    CultureInfo.InvariantCulture,
+                    "Timeout must be between 1 and 4294967294 milliseconds (about 49.7 days), received {0} ms. " +
+                    "A request without a timeout can hang forever, and an order that never returns can never be reconciled.",
+                    options.Timeout.TotalMilliseconds));
+        }
+
         _apiToken = options.ApiToken;
         _apiSecret = options.ApiSecret;
         _baseUrl = baseUrl;
         _hashEncoding = options.HashEncoding;
-        _timeout = options.Timeout > TimeSpan.Zero ? options.Timeout : TimeSpan.FromSeconds(30);
+        _timeout = options.Timeout;
         _retry = RetryPolicy.Resolve(options.Retry);
         _nonceFactory = options.NonceFactory ?? RequestSigner.GenerateNonce;
         _userAgent = string.IsNullOrEmpty(options.UserAgent)
@@ -200,6 +254,9 @@ public sealed class HuurayClient
     /// </code>
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="method"/> or <paramref name="path"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="path"/> does not start with <c>/</c> or contains anything but visible ASCII.
+    /// </exception>
     public async Task<JsonNode?> RequestAsync(
         HttpMethod method,
         string path,
@@ -215,6 +272,18 @@ public sealed class HuurayClient
         if (path is null)
         {
             throw new ArgumentNullException(nameof(path));
+        }
+
+        // The path is appended to the base URL as text, so one not starting with "/"
+        // sends the signed request to another host or port ("@host", ".host", ":port"),
+        // and Uri percent-encodes a line break or space rather than refusing it. The
+        // method needs no check: HttpMethod refuses anything but an HTTP token. The path
+        // is not quoted.
+        if (path.Length == 0 || path[0] != '/' || path.AsSpan().ContainsAnyExceptInRange('!', '~'))
+        {
+            throw new ArgumentException(
+                "The request was not sent: the path must start with \"/\" and contain only visible ASCII, for example \"/v4/Search\".",
+                nameof(path));
         }
 
         HuurayResponse<JsonNode> response = await SendAsync<JsonNode>(

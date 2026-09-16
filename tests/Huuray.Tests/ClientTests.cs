@@ -77,6 +77,129 @@ public class ConstructionTests
         Assert.Equal("https://example.test", harness.First.Origin);
         Assert.Equal("/v4/Balance", harness.First.Path);
     }
+
+    [Theory]
+    // HttpClient writes a header added without validation byte for byte: a line break
+    // injects a header on the wire, and a non-ASCII character fails the send after the
+    // fact — on /v4/Order as an order of unknown outcome, although nothing was sent.
+    [InlineData("\r\nX-Injected: yes")]
+    [InlineData("\n")]
+    [InlineData("\r")]
+    [InlineData("\0")]
+    [InlineData("\t")]
+    [InlineData("\U0000007F")]
+    [InlineData("\U00000001")]
+    [InlineData("\U00000085")]
+    [InlineData("\U000000E4")]
+    public void RejectsAnApiTokenThatCannotBeSentAsAHeader_WithoutQuotingIt(string character)
+    {
+        HuurayConfigurationException error = Assert.Throws<HuurayConfigurationException>(() =>
+            new HuurayClient(new HuurayClientOptions { ApiToken = "tok-sentinel" + character + "tail", ApiSecret = "s" }));
+
+        Assert.DoesNotContain("tok-sentinel", error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("X-Injected", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    // A receiver strips whitespace from both ends of a header value, so this token
+    // would arrive as an empty X-API-TOKEN.
+    [InlineData("   ")]
+    [InlineData(" \t ")]
+    public void TreatsAWhitespaceOnlyApiTokenAsMissing(string apiToken)
+    {
+        HuurayConfigurationException error = Assert.Throws<HuurayConfigurationException>(() =>
+            new HuurayClient(new HuurayClientOptions { ApiToken = apiToken, ApiSecret = "s" }));
+
+        Assert.Contains("ApiToken is required", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("\r\nX-Injected: yes")]
+    [InlineData("\n")]
+    [InlineData("\0")]
+    [InlineData("\t")]
+    [InlineData("\U0000007F")]
+    [InlineData("\U000000E4")]
+    public void RejectsAUserAgentThatCannotBeSentAsAHeader_WithoutQuotingIt(string character)
+    {
+        HuurayConfigurationException error = Assert.Throws<HuurayConfigurationException>(() =>
+            new HuurayClient(new HuurayClientOptions
+            {
+                ApiToken = "t",
+                ApiSecret = "s",
+                UserAgent = "ua-sentinel" + character + "tail",
+            }));
+
+        Assert.DoesNotContain("ua-sentinel", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    // Uri accepts each of these: it percent-encodes the character into the path, turns
+    // the host into an IDN, or trims it — and a trailing line break fails only at the
+    // first request.
+    [InlineData("https://api.huuray.com/ v4")]
+    [InlineData(" https://api.huuray.com")]
+    [InlineData("https://api.huuray.com\r\n")]
+    [InlineData("https://api.huuray.com\r\nX-Injected: yes")]
+    [InlineData("https://api.huuray.com/\t")]
+    [InlineData("https://api.huuray.com/\0")]
+    [InlineData("https://api.huuray.com/\U0000007F")]
+    [InlineData("https://\U000000E4pi.huuray.com")]
+    public void RejectsABaseUrlWithASpaceControlOrNonAsciiCharacter_WithoutQuotingIt(string baseUrl)
+    {
+        HuurayConfigurationException error = Assert.Throws<HuurayConfigurationException>(() =>
+            new HuurayClient(new HuurayClientOptions { ApiToken = "t", ApiSecret = "s", BaseUrl = baseUrl }));
+
+        Assert.DoesNotContain(baseUrl, error.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("X-Injected", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public async Task StillReadsAnEmptyBaseUrlAsTheDefault(string baseUrl)
+    {
+        TestHarness harness = Fake.Client(new MockResponse { Json = Fake.Json("{\"Balances\":[]}") }, baseUrl: baseUrl);
+
+        await harness.Client.Balances.ListAsync();
+
+        Assert.Equal("https://api.huuray.com", harness.First.Origin);
+    }
+
+    [Theory]
+    // CancellationTokenSource.CancelAfter truncates to whole milliseconds and refuses
+    // more than 4294967294: a sub-millisecond timeout fires at once, a longer one throws
+    // at the first request. Zero, negative and InfiniteTimeSpan were silently replaced
+    // with 30 seconds.
+    [InlineData(1L)]
+    [InlineData(9_999L)]
+    [InlineData(0L)]
+    [InlineData(-10_000L)]
+    [InlineData(-1L)]
+    [InlineData(42_949_672_950_000L)]
+    [InlineData(long.MaxValue)]
+    public void RejectsATimeoutTheRuntimeCannotHonour(long ticks)
+    {
+        HuurayConfigurationException error = Assert.Throws<HuurayConfigurationException>(() =>
+            new HuurayClient(new HuurayClientOptions { ApiToken = "t", ApiSecret = "s", Timeout = TimeSpan.FromTicks(ticks) }));
+
+        Assert.Contains("between 1 and 4294967294 milliseconds", error.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(10_000L)]
+    [InlineData(42_949_672_940_000L)]
+    public void AcceptsATimeoutAtEitherEndOfTheRange(long ticks)
+    {
+        HuurayClient client = new(new HuurayClientOptions
+        {
+            ApiToken = "t",
+            ApiSecret = "s",
+            Timeout = TimeSpan.FromTicks(ticks),
+        });
+
+        Assert.NotNull(client);
+    }
 }
 
 public class SigningPerRequestTests
@@ -500,5 +623,69 @@ public class EscapeHatchTests
         await Record.ExceptionAsync(() => harness.Client.RequestAsync(HttpMethod.Get, "/v4/Balance"));
 
         Assert.Single(harness.Calls);
+    }
+
+    [Theory]
+    // The path is appended to the base URL as text, so each of the first five sent the
+    // signed request to another host or port; Uri percent-encodes the rest rather than
+    // refusing them.
+    [InlineData("@evil.test/v4/Order")]
+    [InlineData(".evil.test/v4/Balance")]
+    [InlineData("http://evil.test/v4/Balance")]
+    [InlineData(":8443/v4/Balance")]
+    [InlineData("v4/Balance")]
+    [InlineData("")]
+    [InlineData("/v4/Balance\r\nX-Injected: yes")]
+    [InlineData("/v4/Ba lance")]
+    [InlineData("/v4/Balance\0")]
+    [InlineData("/v4/Balance\t")]
+    [InlineData("/v4/\U00002028")]
+    [InlineData("/v4/Balance\U000000E4")]
+    public async Task RequestAsyncRejectsAPathThatIsNotARootedVisibleAsciiPath_BeforeSending(string path)
+    {
+        TestHarness harness = Fake.Client(new MockResponse { Json = Fake.Json("{}") });
+
+        ArgumentException error = await Assert.ThrowsAsync<ArgumentException>(() =>
+            harness.Client.RequestAsync(HttpMethod.Get, path));
+
+        Assert.Empty(harness.Calls);
+        Assert.Equal("path", error.ParamName);
+        if (path.Length > 0)
+        {
+            Assert.DoesNotContain(path, error.Message, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public async Task RequestAsyncKeepsADoubleSlashPathOnTheConfiguredHost()
+    {
+        // Pinned because "//host" moves the host wherever a path is resolved against
+        // the base URL. Here it is appended as text, so it stays a path.
+        TestHarness harness = Fake.Client(new MockResponse { Json = Fake.Json("{}") });
+
+        await harness.Client.RequestAsync(HttpMethod.Get, "//evil.test/v4/Balance");
+
+        Assert.Equal("https://api.huuray.com", harness.First.Origin);
+        Assert.Equal("//evil.test/v4/Balance", harness.First.Path);
+    }
+}
+
+public class HeaderInputTests
+{
+    [Theory]
+    [InlineData("")]
+    [InlineData("nonce\r\nX-Injected: yes")]
+    [InlineData("nonce\t")]
+    [InlineData("nonce\U000000E4")]
+    public async Task RejectsABadCustomNonceBeforeSending_NotAsAnOrderOfUnknownOutcome(string nonce)
+    {
+        TestHarness harness = Fake.Client(new MockResponse { Json = Fake.Json("{}") }, nonceFactory: () => nonce);
+
+        Exception? error = await Record.ExceptionAsync(() =>
+            harness.Client.Orders.CreateAsync(OrdersTestData.Base with { RefId = "ref-nonce" }));
+
+        Assert.IsType<ArgumentException>(error);
+        Assert.Empty(harness.Calls);
+        Assert.DoesNotContain("X-Injected", error!.Message, StringComparison.Ordinal);
     }
 }
