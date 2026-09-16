@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `HuurayConfigurationException` at construction. A sub-millisecond timeout fired at once,
   a longer one threw `ArgumentOutOfRangeException` at the first request, and zero, a
   negative value or `Timeout.InfiniteTimeSpan` was silently replaced with 30 seconds.
+- **A `BaseUrl` with user-info (`user@` or `user:password@`)** throws
+  `HuurayConfigurationException` at construction. The default `HttpClient` did not send
+  it, but it stayed in every request URI.
 
 ### Fixed
 
@@ -34,14 +37,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A `BaseUrl` with a space, control character or non-ASCII character** throws
   `HuurayConfigurationException` at construction. It was percent-encoded into the path,
   turned into an IDN host, or failed only at the first request.
-- **A `BaseUrl` with user-info (`user@` or `user:password@`), a query (`?`) or a fragment
-  (`#`)** throws `HuurayConfigurationException` at construction. The default `HttpClient`
-  did not send user-info, but it stayed in every request URI. The path is appended as
-  text, so `https://host?x` requested `/?x/v4/Balance` and `https://host#x` requested `/`.
-  A trailing slash is still accepted.
+- **A `BaseUrl` with a query (`?`) or a fragment (`#`)** throws
+  `HuurayConfigurationException` at construction. The path is appended as text, so
+  `https://host?x` requested `/?x/v4/Balance` and `https://host#x` requested `/`. A
+  trailing slash is still accepted.
 - **Retry delays must be at most 4294967294 milliseconds**: a larger
-  `RetryOptions.BaseDelay` or `MaxDelay` throws `HuurayConfigurationException` at
-  construction. With both set to `TimeSpan.MaxValue`, the wait before the first retry threw
+  `RetryOptions.MaxDelay` throws `HuurayConfigurationException` at construction. With
+  both set to `TimeSpan.MaxValue`, the wait before the first retry threw
   `ArgumentOutOfRangeException` after the first attempt had been sent. A zero `BaseDelay`
   with `MaxRetries` above 1024 threw `ArgumentException` before retry 1025; that wait is
   now zero.
