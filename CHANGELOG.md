@@ -32,6 +32,12 @@ First release. Complete coverage of the Huuray API v4.
 - `HuurayClient` with request signing, nonce generation, timeouts, and typed exceptions.
 - All nine v4 operations: balances, catalogue, templates, stock, exchange rates, orders
   (create, create sync, search, resend, cancel).
+- PDF templates, added to the v4 specification: `Templates.ListAsync()` returns
+  `PdfTemplates` (`PdfTemplate`: `Uid`, `Name`, `Type`, `Language`, `Country`, `BrandName`)
+  alongside `Templates`. `CreateOrderRequest` and `SendRewardRequest` accept an optional
+  `PdfTemplateUid`, sent as `DeliveryPDFTemplateUid` and omitted when unset. Setting it
+  without `TemplateId` throws before any request is made; the API requires that template to
+  be an email template.
 - `SendRewardAsync` — one gift card to one recipient in a single call.
 - `RequestAsync` — an escape hatch that signs any call and returns a `JsonNode`.
 - Read-only CLI tool `Huuray.Cli`: `balance`, `catalogue`, `templates`, `stock`, `rates`,

@@ -82,6 +82,9 @@ internal sealed class OrderRequestWire
     [JsonPropertyName("DeliveryTemplateId")]
     public int? DeliveryTemplateId { get; set; }
 
+    [JsonPropertyName("DeliveryPDFTemplateUid")]
+    public string? DeliveryPDFTemplateUid { get; set; }
+
     [JsonPropertyName("DeliveryDatetime")]
     public string? DeliveryDatetime { get; set; }
 
@@ -247,10 +250,34 @@ internal sealed class TemplateItemWire
     public string? PlainText { get; set; }
 }
 
+internal sealed class PDFTemplateItemWire
+{
+    [JsonPropertyName("Uid")]
+    public string? Uid { get; set; }
+
+    [JsonPropertyName("Name")]
+    public string? Name { get; set; }
+
+    [JsonPropertyName("Type")]
+    public string? Type { get; set; }
+
+    [JsonPropertyName("Language")]
+    public string? Language { get; set; }
+
+    [JsonPropertyName("Country")]
+    public string? Country { get; set; }
+
+    [JsonPropertyName("BrandName")]
+    public string? BrandName { get; set; }
+}
+
 internal sealed class TemplateResponseWire
 {
     [JsonPropertyName("Templates")]
     public List<TemplateItemWire>? Templates { get; set; }
+
+    [JsonPropertyName("PDFTemplates")]
+    public List<PDFTemplateItemWire>? PDFTemplates { get; set; }
 }
 
 internal sealed class StockResponseWire

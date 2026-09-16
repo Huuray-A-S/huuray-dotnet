@@ -39,6 +39,7 @@ public sealed class ExercisedSurface : IAsyncLifetime
             Expires = new DateTimeOffset(2027, 1, 1, 0, 0, 0, TimeSpan.Zero),
             RefId = "ref-1",
             TemplateId = 42,
+            PdfTemplateUid = "pdf-template-uid-1",
             DeliveryDatetime = new DateTimeOffset(2026, 9, 1, 9, 0, 0, TimeSpan.Zero),
             PersonalMessage = "Thank you",
             Recipients = new[]
@@ -57,6 +58,7 @@ public sealed class ExercisedSurface : IAsyncLifetime
             Expires = new DateTimeOffset(2027, 1, 1, 0, 0, 0, TimeSpan.Zero),
             RefId = "ref-sync",
             TemplateId = 42,
+            PdfTemplateUid = "pdf-template-uid-1",
             DeliveryDatetime = new DateTimeOffset(2026, 9, 1, 9, 0, 0, TimeSpan.Zero),
             PersonalMessage = "Thanks",
             Recipients = new[] { new Recipient { Name = "C", Email = "c@example.com", RefId = "r-c" } },
@@ -69,6 +71,7 @@ public sealed class ExercisedSurface : IAsyncLifetime
             Currency = "DKK",
             Recipient = new Recipient { Name = "Jane", Email = "jane@example.com" },
             TemplateId = 42,
+            PdfTemplateUid = "pdf-template-uid-1",
             RefId = "ref-2",
             PersonalMessage = "Nice work",
             Expires = new DateTimeOffset(2027, 1, 1, 0, 0, 0, TimeSpan.Zero),
@@ -217,6 +220,24 @@ public class RequestConformanceGate : IClassFixture<ExercisedSurface>
         }
 
         Assert.True(failures.Count == 0, string.Join("\n", failures));
+    }
+
+    [Fact]
+    public void ExercisesDeliveryPDFTemplateUidOnEveryOrderCall_SoTheGateValidatesIt()
+    {
+        // Guards the exercise itself: if the field silently stopped being sent, the schema
+        // check above would still pass, having validated nothing about it.
+        Assert.True(Spec.Schemas["OrderRequest"]!["properties"]!.AsObject().ContainsKey("DeliveryPDFTemplateUid"));
+
+        List<CapturedRequest> orders = _surface.Calls
+            .Where(c => c.Method == "POST" && c.Path == "/v4/Order")
+            .ToList();
+
+        Assert.Equal(3, orders.Count);
+        foreach (CapturedRequest call in orders)
+        {
+            Assert.Equal("pdf-template-uid-1", call.BodyJson!["DeliveryPDFTemplateUid"]?.GetValue<string>());
+        }
     }
 
     [Fact]

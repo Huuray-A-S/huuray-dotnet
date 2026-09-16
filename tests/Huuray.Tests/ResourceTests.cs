@@ -118,6 +118,48 @@ public class TemplatesTests
     }
 
     [Fact]
+    public async Task MapsPdfTemplateFields_EvenWhenThereAreNoDeliveryTemplates()
+    {
+        // The regression: an account whose templates are all PDF templates answers with an
+        // empty Templates list, and mapping only Templates silently dropped every PDF template.
+        TestHarness harness = Fake.Client(new MockResponse
+        {
+            Json = Fake.Json(
+                "{\"Templates\":[],\"PDFTemplates\":[" +
+                "{\"Uid\":\"pdf-uid-1\",\"Name\":\"Example PDF\",\"Type\":\"ExampleType\",\"Language\":\"en\"," +
+                "\"Country\":\"Exampleland\",\"BrandName\":\"Example Brand\"}," +
+                "{\"Uid\":\"pdf-uid-2\",\"Name\":\"Any country, any brand\",\"Type\":\"ExampleType\"," +
+                "\"Language\":\"da\",\"Country\":null,\"BrandName\":null}]," +
+                "\"Status\":200,\"Message\":null,\"StatusMessage\":null}"),
+        });
+
+        ListTemplatesResult result = await harness.Client.Templates.ListAsync();
+
+        Assert.Empty(result.Templates);
+        Assert.Equal(
+            new[]
+            {
+                new PdfTemplate("pdf-uid-1", "Example PDF", "ExampleType", "en", "Exampleland", "Example Brand"),
+                new PdfTemplate("pdf-uid-2", "Any country, any brand", "ExampleType", "da", null, null),
+            },
+            result.PdfTemplates);
+    }
+
+    [Theory]
+    [InlineData("{\"Templates\":[{\"Id\":42,\"Name\":\"Default\"}],\"PDFTemplates\":null}")]
+    [InlineData("{\"Templates\":[{\"Id\":42,\"Name\":\"Default\"}]}")]
+    public async Task ReturnsAnEmptyPdfTemplateListWhenTheApiSendsNullOrOmitsIt(string json)
+    {
+        TestHarness harness = Fake.Client(new MockResponse { Json = Fake.Json(json) });
+
+        ListTemplatesResult result = await harness.Client.Templates.ListAsync();
+
+        Assert.NotNull(result.PdfTemplates);
+        Assert.Empty(result.PdfTemplates);
+        Assert.Single(result.Templates);
+    }
+
+    [Fact]
     public async Task AnAccountWithNoTemplatesGetsA404_NotAnEmptyList()
     {
         // Observed live: /v4/Template answers 404 "There were no active templates".

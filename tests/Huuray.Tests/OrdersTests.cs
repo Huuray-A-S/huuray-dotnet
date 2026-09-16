@@ -324,6 +324,86 @@ public class SendRewardTests
     }
 }
 
+public class PdfTemplateOrderTests
+{
+    private const string PdfUid = "pdf-template-uid-1";
+
+    private static CreateOrderRequest WithDelivery => OrdersTestData.Base with
+    {
+        TemplateId = 42,
+        Recipients = new[] { new Recipient { Name = "Jane", Email = "jane@example.com" } },
+    };
+
+    private static SendRewardRequest Reward => new()
+    {
+        ProductToken = "tok",
+        Value = 5000,
+        Currency = "DKK",
+        Recipient = new Recipient { Name = "Jane", Email = "jane@example.com" },
+        TemplateId = 42,
+        RefId = "reward-ref-1",
+    };
+
+    [Theory]
+    [InlineData("create")]
+    [InlineData("createSync")]
+    [InlineData("sendReward")]
+    public async Task SendsDeliveryPDFTemplateUidWhenSupplied(string method)
+    {
+        TestHarness harness = Fake.Client(
+            new MockResponse { Json = Fake.Json("{\"OrderUID\":\"x\",\"Vouchers\":[]}") });
+
+        await Place(harness, method, PdfUid);
+
+        CapturedRequest call = Assert.Single(harness.Calls);
+        Assert.Equal("/v4/Order", call.Path);
+        JsonNode body = call.BodyJson!;
+        Assert.Equal(PdfUid, body["DeliveryPDFTemplateUid"]!.GetValue<string>());
+        Assert.Equal(42, body["DeliveryTemplateId"]!.GetValue<int>());
+    }
+
+    [Theory]
+    [InlineData("create")]
+    [InlineData("createSync")]
+    [InlineData("sendReward")]
+    public async Task OmitsTheDeliveryPDFTemplateUidKeyWhenNotSupplied(string method)
+    {
+        TestHarness harness = Fake.Client(
+            new MockResponse { Json = Fake.Json("{\"OrderUID\":\"x\",\"Vouchers\":[]}") });
+
+        await Place(harness, method, pdfTemplateUid: null);
+
+        CapturedRequest call = Assert.Single(harness.Calls);
+        Assert.False(call.BodyJson!.AsObject().ContainsKey("DeliveryPDFTemplateUid"));
+        Assert.DoesNotContain("DeliveryPDFTemplateUid", call.Body!, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("create")]
+    [InlineData("createSync")]
+    public async Task RejectsAPdfTemplateUidWithoutATemplateId_BeforeAnyRequest(string method)
+    {
+        TestHarness harness = Fake.Client(new MockResponse { Json = Fake.Json("{\"OrderUID\":\"x\"}") });
+        CreateOrderRequest request = OrdersTestData.Base with { PdfTemplateUid = PdfUid };
+
+        ArgumentException error = await Assert.ThrowsAsync<ArgumentException>(() => method == "create"
+            ? harness.Client.Orders.CreateAsync(request)
+            : harness.Client.Orders.CreateSyncAsync(request));
+
+        Assert.Contains("TemplateId is required when PdfTemplateUid is set", error.Message, StringComparison.Ordinal);
+        Assert.Contains("email template", error.Message, StringComparison.Ordinal);
+        Assert.Empty(harness.Calls);
+    }
+
+    private static Task Place(TestHarness harness, string method, string? pdfTemplateUid) => method switch
+    {
+        "create" => harness.Client.Orders.CreateAsync(WithDelivery with { PdfTemplateUid = pdfTemplateUid }),
+        "createSync" => harness.Client.Orders.CreateSyncAsync(WithDelivery with { PdfTemplateUid = pdfTemplateUid }),
+        "sendReward" => harness.Client.Orders.SendRewardAsync(Reward with { PdfTemplateUid = pdfTemplateUid }),
+        _ => throw new ArgumentOutOfRangeException(nameof(method), method, null),
+    };
+}
+
 public class IndeterminateOrderTests
 {
     [Fact]

@@ -145,6 +145,17 @@ public sealed record CreateOrderRequest
     /// <summary>Delivery template id from <c>Templates.ListAsync()</c>. Leave unset for no delivery.</summary>
     public int? TemplateId { get; init; }
 
+    /// <summary>
+    /// Optional PDF template uid from <c>Templates.ListAsync()</c>, attached as a document to the
+    /// emails sent by <see cref="TemplateId"/>.
+    /// </summary>
+    /// <remarks>
+    /// Requires <see cref="TemplateId"/>: setting this without one throws before any request is
+    /// made. The API also requires that template to be an email template, which this client
+    /// cannot check without a lookup, so it leaves that to the API.
+    /// </remarks>
+    public string? PdfTemplateUid { get; init; }
+
     /// <summary>Schedule delivery for a future time. Leave unset to deliver as soon as possible.</summary>
     public DateTimeOffset? DeliveryDatetime { get; init; }
 
@@ -181,6 +192,13 @@ public sealed record SendRewardRequest
 
     /// <summary>Delivery template id from <c>Templates.ListAsync()</c>.</summary>
     public required int TemplateId { get; init; }
+
+    /// <summary>
+    /// Optional PDF template uid from <c>Templates.ListAsync()</c>, attached as a document to the
+    /// email sent by <see cref="TemplateId"/>. The API requires <see cref="TemplateId"/> to be an
+    /// email template when this is set.
+    /// </summary>
+    public string? PdfTemplateUid { get; init; }
 
     /// <summary>
     /// Your reconciliation key. <strong>Required by this SDK</strong>, though the API

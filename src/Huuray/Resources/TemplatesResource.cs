@@ -16,10 +16,10 @@ public sealed class TemplatesResource
     internal TemplatesResource(HuurayClient client) => _client = client;
 
     /// <summary>
-    /// Lists the delivery templates available to your account.
+    /// Lists the delivery templates and PDF templates available to your account.
     /// </summary>
     /// <param name="cancellationToken">Cancels the call.</param>
-    /// <returns>The templates on the account.</returns>
+    /// <returns>The delivery templates and the PDF templates on the account.</returns>
     /// <remarks>
     /// <c>POST /v4/Template</c>. The endpoint declares no request body in the API
     /// specification, so this client sends none — confirmed accepted by the live API.
@@ -61,6 +61,20 @@ public sealed class TemplatesResource
                 t.PlainText);
         }
 
-        return new ListTemplatesResult(templates);
+        List<PDFTemplateItemWire> pdfItems = response.Data?.PDFTemplates ?? new List<PDFTemplateItemWire>();
+        PdfTemplate[] pdfTemplates = new PdfTemplate[pdfItems.Count];
+        for (int i = 0; i < pdfItems.Count; i++)
+        {
+            PDFTemplateItemWire p = pdfItems[i];
+            pdfTemplates[i] = new PdfTemplate(
+                p.Uid,
+                p.Name,
+                p.Type,
+                p.Language,
+                p.Country,
+                p.BrandName);
+        }
+
+        return new ListTemplatesResult(templates, pdfTemplates);
     }
 }

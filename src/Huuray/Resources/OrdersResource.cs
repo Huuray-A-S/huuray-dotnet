@@ -46,7 +46,10 @@ public sealed class OrdersResource
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="request"/> is <see langword="null"/>.</exception>
-    /// <exception cref="ArgumentException">The quantity or the recipient list is invalid.</exception>
+    /// <exception cref="ArgumentException">
+    /// The quantity or the recipient list is invalid, or <see cref="CreateOrderRequest.PdfTemplateUid"/>
+    /// is set without <see cref="CreateOrderRequest.TemplateId"/>.
+    /// </exception>
     /// <exception cref="HuurayIndeterminateOrderException">The outcome of the order is unknown.</exception>
     /// <exception cref="HuurayApiException">The API definitively rejected the order.</exception>
     public async Task<CreateOrderResult> CreateAsync(
@@ -81,7 +84,8 @@ public sealed class OrdersResource
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="request"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">
-    /// The quantity exceeds <see cref="SyncQuantityLimit"/>, or the recipient list is invalid.
+    /// The quantity exceeds <see cref="SyncQuantityLimit"/>, the recipient list is invalid, or
+    /// <see cref="CreateOrderRequest.PdfTemplateUid"/> is set without <see cref="CreateOrderRequest.TemplateId"/>.
     /// </exception>
     /// <exception cref="HuurayIndeterminateOrderException">The outcome of the order is unknown.</exception>
     /// <exception cref="HuurayApiException">The API definitively rejected the order.</exception>
@@ -157,6 +161,7 @@ public sealed class OrdersResource
                 Quantity = 1,
                 RefId = request.RefId,
                 TemplateId = request.TemplateId,
+                PdfTemplateUid = request.PdfTemplateUid,
                 Recipients = new[] { request.Recipient },
                 Expires = request.Expires,
                 DeliveryDatetime = request.DeliveryDatetime,
@@ -341,6 +346,14 @@ public sealed class OrdersResource
                 nameof(request));
         }
 
+        if (request.PdfTemplateUid is not null && request.TemplateId is null)
+        {
+            throw new ArgumentException(
+                "TemplateId is required when PdfTemplateUid is set — the API attaches the PDF to the emails " +
+                "sent by the delivery template, and requires that template to be an email template.",
+                nameof(request));
+        }
+
         if (request.TemplateId is not null)
         {
             int count = request.Recipients?.Count ?? 0;
@@ -392,6 +405,7 @@ public sealed class OrdersResource
             Sync = sync,
             RefID = request.RefId,
             DeliveryTemplateId = request.TemplateId,
+            DeliveryPDFTemplateUid = request.PdfTemplateUid,
             DeliveryDatetime = SpecFormats.ToSpecDateTime(request.DeliveryDatetime),
             PersonalMessage = request.PersonalMessage,
             Recipients = recipients,
