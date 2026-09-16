@@ -153,6 +153,10 @@ public sealed record CreateOrderRequest
     /// Requires <see cref="TemplateId"/>: setting this without one throws before any request is
     /// made. The API also requires that template to be an email template, which this client
     /// cannot check without a lookup, so it leaves that to the API.
+    /// The PDF template must also be available for the ordered product's brand and country
+    /// (<see cref="PdfTemplate.BrandName"/> / <see cref="PdfTemplate.Country"/>, where null means
+    /// any); otherwise the API rejects the order with a 422, thrown as
+    /// <see cref="HuurayValidationException"/>. This client does not pre-check that.
     /// </remarks>
     public string? PdfTemplateUid { get; init; }
 
@@ -198,6 +202,12 @@ public sealed record SendRewardRequest
     /// email sent by <see cref="TemplateId"/>. The API requires <see cref="TemplateId"/> to be an
     /// email template when this is set.
     /// </summary>
+    /// <remarks>
+    /// The PDF template must also be available for the ordered product's brand and country
+    /// (<see cref="PdfTemplate.BrandName"/> / <see cref="PdfTemplate.Country"/>, where null means
+    /// any); otherwise the API rejects the order with a 422, thrown as
+    /// <see cref="HuurayValidationException"/>. This client does not pre-check that.
+    /// </remarks>
     public string? PdfTemplateUid { get; init; }
 
     /// <summary>
