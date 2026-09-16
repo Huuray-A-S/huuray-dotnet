@@ -44,7 +44,7 @@ internal sealed class RetryPolicy
     /// <see cref="RetryOptions.MaxRetries"/>, never silently take zero. A clobbered
     /// <c>MaxRetries</c> would be invisible until the first transient failure.
     /// </remarks>
-    /// <exception cref="HuurayConfigurationException">A delay is above 4294967294 milliseconds.</exception>
+    /// <exception cref="HuurayConfigurationException"><see cref="RetryOptions.MaxDelay"/> is above 4294967294 milliseconds.</exception>
     internal static RetryPolicy Resolve(RetryOptions? options)
     {
         RetryOptions defaults = RetryOptions.Default;
@@ -55,9 +55,8 @@ internal sealed class RetryPolicy
 
         // Task.Delay throws above 4294967294 ms, and the wait runs only after a first
         // attempt has already been sent, so the limit is checked here, at construction.
-        // Every computed wait is at most MaxDelay; BaseDelay shares the limit so that one
-        // rule covers both.
-        CheckDelay(nameof(RetryOptions.BaseDelay), baseDelay);
+        // MaxDelay bounds every wait: BackoffDelay caps it with Math.Min, so BaseDelay
+        // needs no limit of its own.
         CheckDelay(nameof(RetryOptions.MaxDelay), maxDelay);
 
         return new RetryPolicy(

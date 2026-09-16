@@ -548,9 +548,7 @@ public class RetryPolicyTests
     [Theory]
     // Task.Delay throws ArgumentOutOfRangeException above 4294967294 ms, and it ran only
     // after the first attempt had already been sent.
-    [InlineData("BaseDelay", 42_949_672_950_000L)]
     [InlineData("MaxDelay", 42_949_672_950_000L)]
-    [InlineData("BaseDelay", long.MaxValue)]
     [InlineData("MaxDelay", long.MaxValue)]
     public void RejectsARetryDelayTaskDelayCannotHonour_AtConstruction(string property, long ticks)
     {
@@ -587,6 +585,29 @@ public class RetryPolicyTests
         Assert.Equal(
             TimeSpan.FromMilliseconds(4_294_967_294),
             RetryPolicy.Resolve(new RetryOptions { BaseDelay = TimeSpan.FromMilliseconds(4_294_967_294) }).BaseDelay);
+    }
+
+    [Fact]
+    public async Task AcceptsAnyBaseDelay_MaxDelayBoundsEveryWait()
+    {
+        // BackoffDelay caps every wait at MaxDelay, so a BaseDelay above what Task.Delay
+        // accepts never reaches it.
+        TestHarness harness = Fake.ClientWithQueue(
+            new[]
+            {
+                new MockResponse { Status = 503 },
+                new MockResponse { Status = 200, Json = Fake.Json("{\"Balances\":[]}") },
+            },
+            retry: new RetryOptions
+            {
+                MaxRetries = 1,
+                BaseDelay = TimeSpan.MaxValue,
+                MaxDelay = TimeSpan.FromMilliseconds(1),
+            });
+
+        await harness.Client.Balances.ListAsync();
+
+        Assert.Equal(2, harness.Calls.Count);
     }
 
     [Theory]

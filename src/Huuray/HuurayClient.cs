@@ -80,8 +80,7 @@ public sealed class HuurayClient
     /// <see cref="HuurayClientOptions.UserAgent"/> holds a control or non-ASCII character,
     /// <see cref="HuurayClientOptions.BaseUrl"/> is not an absolute http(s) URL of visible ASCII or
     /// holds user-info, a query or a fragment, <see cref="HuurayClientOptions.Timeout"/> is outside
-    /// 1 to 4294967294 milliseconds, or a <see cref="HuurayClientOptions.Retry"/> delay is above
-    /// 4294967294 milliseconds.
+    /// 1 to 4294967294 milliseconds, or <c>Retry.MaxDelay</c> is above 4294967294 milliseconds.
     /// </exception>
     public HuurayClient(HuurayClientOptions options, HttpClient? httpClient = null)
     {
