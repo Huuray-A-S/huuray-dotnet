@@ -155,7 +155,7 @@ await huuray.Orders.CreateAsync(new CreateOrderRequest
 
 All five fields are optional and independent, and `SendRewardRequest` takes them too. Each is accepted only when the matching option is enabled on your account; otherwise the API answers 422, thrown as `HuurayValidationException`. The client sends every value as given and leaves length and content checks to the API.
 
-**Uploads are never retried.** Each upload stores a file that holds one of your account's pending upload slots until an order uses its token, and no call lists uploads. A timeout or a dropped connection throws the ordinary `HuurayTimeoutException` or `HuurayConnectionException` — not `HuurayIndeterminateOrderException` — and its message says the upload may still have been stored.
+**Uploads are never retried.** Each upload stores a file that holds one of your account's pending upload slots until an order uses its token or the upload is cleaned up, and no call lists uploads. A timeout or a dropped connection throws the ordinary `HuurayTimeoutException` or `HuurayConnectionException` — not `HuurayIndeterminateOrderException` — and its message says the upload may still have been stored.
 
 ## Seven things worth knowing
 

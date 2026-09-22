@@ -13,8 +13,8 @@ namespace Huuray;
 /// <remarks>
 /// <strong>An upload is never retried.</strong> Every <c>POST /v4/Upload</c> stores a new
 /// file that holds one of the account's pending upload slots until an order uses its
-/// token, and no endpoint lists uploads — so a repeated upload can leave one behind that
-/// you have no token for.
+/// token or the upload is cleaned up, and no endpoint lists uploads — so a repeated upload
+/// can leave one behind that you have no token for.
 /// </remarks>
 public sealed class UploadsResource
 {
