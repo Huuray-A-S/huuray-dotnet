@@ -18,11 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `HuurayTimeoutException` or `HuurayConnectionException`, whose message says the upload may
   still have been stored and may hold a pending upload slot.
 - Without a `ContentType` the file part is sent as `application/octet-stream`. A `FileName` that
-  is empty, or holds a double quote or a control character, and a `ContentType` that is not a
-  media type throw `ArgumentException` before anything is sent, without quoting the value.
-- `FileName` and `CustomerReference` are treated as personal data: `Redaction` masks both, and
-  `CreateUploadRequest`, `UploadResult`, `CreateOrderRequest` and `SendRewardRequest` mask them
-  in `ToString()`. `CreateUploadRequest.ToString()` prints the file as `[N bytes]`.
+  is null, empty or only whitespace, or holds a double quote or a control character, and a
+  `ContentType` that is not a media type throw `ArgumentException` before anything is sent,
+  without quoting the value.
+- `CreateUploadRequest` and `UploadResult` mask `FileName` in `ToString()`, and
+  `CreateUploadRequest.ToString()` prints the file as `[N bytes]`.
 - The request-conformance gate validates `multipart/form-data` bodies part by part and fails
   closed on any multipart shape it does not understand; the coverage gate expects ten operations.
 
@@ -36,6 +36,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A `BaseUrl` with user-info (`user@` or `user:password@`)** throws
   `HuurayConfigurationException` at construction. The default `HttpClient` did not send
   it, but it stayed in every request URI.
+- **`FileName` and `CustomerReference` are treated as personal data.** `Redaction` masks
+  both, and `CreateOrderRequest` and `SendRewardRequest` mask `CustomerReference` in
+  `ToString()`.
 
 ### Fixed
 
