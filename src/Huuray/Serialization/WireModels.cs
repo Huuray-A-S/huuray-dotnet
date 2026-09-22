@@ -93,6 +93,21 @@ internal sealed class OrderRequestWire
 
     [JsonPropertyName("Recipients")]
     public List<OrderRecipientWire>? Recipients { get; set; }
+
+    [JsonPropertyName("AdditionalReference")]
+    public string? AdditionalReference { get; set; }
+
+    [JsonPropertyName("CustomerReference")]
+    public string? CustomerReference { get; set; }
+
+    [JsonPropertyName("ArticleNumber")]
+    public string? ArticleNumber { get; set; }
+
+    [JsonPropertyName("Description")]
+    public string? Description { get; set; }
+
+    [JsonPropertyName("PurchaseOrderFileToken")]
+    public string? PurchaseOrderFileToken { get; set; }
 }
 
 /// <summary>Request body of <c>POST /v4/Search</c>.</summary>
@@ -381,4 +396,23 @@ internal sealed class CancelResponseWire
 
     [JsonPropertyName("Vouchers")]
     public List<CancelVoucherWire>? Vouchers { get; set; }
+}
+
+/// <summary>
+/// Mirrors <c>UploadResponse</c>. Its request is <c>multipart/form-data</c>, not JSON, so it
+/// has no request wire type.
+/// </summary>
+internal sealed class UploadResponseWire
+{
+    [JsonPropertyName("Token")]
+    public string? Token { get; set; }
+
+    [JsonPropertyName("FileName")]
+    public string? FileName { get; set; }
+
+    [JsonPropertyName("ContentType")]
+    public string? ContentType { get; set; }
+
+    [JsonPropertyName("Size")]
+    public long? Size { get; set; }
 }

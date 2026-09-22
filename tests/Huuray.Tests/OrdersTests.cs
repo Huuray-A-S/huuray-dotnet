@@ -751,3 +751,153 @@ public class DateFormattingTests
         Assert.Equal("2026-09-01T09:00:00.000Z", body["DeliveryDatetime"]!.GetValue<string>());
     }
 }
+
+public class PurchaseOrderFieldTests
+{
+    private static readonly string[] Fields =
+    {
+        "AdditionalReference", "CustomerReference", "ArticleNumber", "Description", "PurchaseOrderFileToken",
+    };
+
+    private static CreateOrderRequest Order => OrdersTestData.Base with
+    {
+        TemplateId = 42,
+        Recipients = new[] { new Recipient { Name = "Jane", Email = "jane@example.com" } },
+        RefId = "po-ref-1",
+    };
+
+    private static SendRewardRequest Reward => new()
+    {
+        ProductToken = "tok",
+        Value = 5000,
+        Currency = "DKK",
+        Recipient = new Recipient { Name = "Jane", Email = "jane@example.com" },
+        TemplateId = 42,
+        RefId = "po-ref-1",
+    };
+
+    [Theory]
+    [InlineData("create")]
+    [InlineData("createSync")]
+    [InlineData("sendReward")]
+    [InlineData("clientSendReward")]
+    public async Task SendsEachFieldVerbatim_WithNoClientSideChecks(string method)
+    {
+        // Longer than 250 characters, padded, holding a script tag, and a token that is no
+        // GUID: the API decides all of that, so every value goes out exactly as given.
+        string longText = "  " + new string('x', 300) + "  ";
+        TestHarness harness = Fake.Client(new MockResponse { Json = Fake.Json("{\"OrderUID\":\"x\",\"Vouchers\":[]}") });
+
+        await Place(harness, method, new[] { longText, "<script>alert(1)</script>", "ART-1", "Ten gift cards ✓", "not-a-guid" });
+
+        JsonNode body = Assert.Single(harness.Calls).BodyJson!;
+        Assert.Equal(longText, body["AdditionalReference"]!.GetValue<string>());
+        Assert.Equal("<script>alert(1)</script>", body["CustomerReference"]!.GetValue<string>());
+        Assert.Equal("ART-1", body["ArticleNumber"]!.GetValue<string>());
+        Assert.Equal("Ten gift cards ✓", body["Description"]!.GetValue<string>());
+        Assert.Equal("not-a-guid", body["PurchaseOrderFileToken"]!.GetValue<string>());
+    }
+
+    [Theory]
+    [InlineData("create")]
+    [InlineData("createSync")]
+    [InlineData("sendReward")]
+    [InlineData("clientSendReward")]
+    public async Task OmitsEveryFieldThatIsNotGiven(string method)
+    {
+        TestHarness harness = Fake.Client(new MockResponse { Json = Fake.Json("{\"OrderUID\":\"x\",\"Vouchers\":[]}") });
+
+        await Place(harness, method, new string?[5]);
+
+        CapturedRequest call = Assert.Single(harness.Calls);
+        foreach (string field in Fields)
+        {
+            Assert.False(call.BodyJson!.AsObject().ContainsKey(field), $"{field} was sent although it was not given");
+            Assert.DoesNotContain(field, call.Body!, StringComparison.Ordinal);
+        }
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public async Task SendsOneFieldWithoutTheOthers(int index)
+    {
+        TestHarness harness = Fake.Client(new MockResponse { Json = Fake.Json("{\"OrderUID\":\"x\"}") });
+        string?[] values = new string?[5];
+        values[index] = "value-" + index.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        await Place(harness, "create", values);
+
+        JsonObject body = harness.First.BodyJson!.AsObject();
+        for (int i = 0; i < Fields.Length; i++)
+        {
+            Assert.Equal(i == index, body.ContainsKey(Fields[i]));
+        }
+
+        Assert.Equal(values[index], body[Fields[index]]!.GetValue<string>());
+    }
+
+    [Fact]
+    public async Task SendsAnEmptyStringRatherThanDroppingIt()
+    {
+        TestHarness harness = Fake.Client(new MockResponse { Json = Fake.Json("{\"OrderUID\":\"x\"}") });
+
+        await Place(harness, "create", new[] { string.Empty, string.Empty, string.Empty, string.Empty, string.Empty });
+
+        JsonObject body = harness.First.BodyJson!.AsObject();
+        foreach (string field in Fields)
+        {
+            Assert.Equal(string.Empty, body[field]!.GetValue<string>());
+        }
+    }
+
+    [Fact]
+    public async Task AttachesAnUploadedFileByItsToken()
+    {
+        TestHarness harness = Fake.ClientWithQueue(new[]
+        {
+            UploadsTestData.Response201,
+            new MockResponse { Status = 202, Json = Fake.Json("{\"OrderUID\":\"x\",\"RefID\":\"po-ref-1\"}") },
+        });
+
+        UploadResult upload = await harness.Client.Uploads.CreateAsync(UploadsTestData.Pdf);
+        await harness.Client.Orders.CreateAsync(Order with { PurchaseOrderFileToken = upload.Token });
+
+        Assert.Equal(new[] { "/v4/Upload", "/v4/Order" }, new[] { harness.Calls[0].Path, harness.Calls[1].Path });
+        Assert.Equal(
+            "60050460-7a2d-42a8-a4dd-5cef88ad8374",
+            harness.Calls[1].BodyJson!["PurchaseOrderFileToken"]!.GetValue<string>());
+    }
+
+    private static Task Place(TestHarness harness, string method, string?[] v)
+    {
+        CreateOrderRequest order = Order with
+        {
+            AdditionalReference = v[0],
+            CustomerReference = v[1],
+            ArticleNumber = v[2],
+            Description = v[3],
+            PurchaseOrderFileToken = v[4],
+        };
+        SendRewardRequest reward = Reward with
+        {
+            AdditionalReference = v[0],
+            CustomerReference = v[1],
+            ArticleNumber = v[2],
+            Description = v[3],
+            PurchaseOrderFileToken = v[4],
+        };
+
+        return method switch
+        {
+            "create" => harness.Client.Orders.CreateAsync(order),
+            "createSync" => harness.Client.Orders.CreateSyncAsync(order),
+            "sendReward" => harness.Client.Orders.SendRewardAsync(reward),
+            "clientSendReward" => harness.Client.SendRewardAsync(reward),
+            _ => throw new ArgumentOutOfRangeException(nameof(method), method, null),
+        };
+    }
+}

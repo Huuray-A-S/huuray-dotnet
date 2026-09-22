@@ -28,6 +28,7 @@ namespace Huuray.Serialization;
 [JsonSerializable(typeof(OrderResponseWire))]
 [JsonSerializable(typeof(ResendResponseWire))]
 [JsonSerializable(typeof(CancelResponseWire))]
+[JsonSerializable(typeof(UploadResponseWire))]
 internal sealed partial class HuurayJsonContext : JsonSerializerContext
 {
 }

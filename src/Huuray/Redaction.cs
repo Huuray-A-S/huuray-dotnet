@@ -42,6 +42,11 @@ public static class Redaction
             "ApiSecret",
             "Email",
             "Phone",
+
+            // A purchase order's file name and the customer contact on its invoice
+            // routinely carry a person's name.
+            "FileName",
+            "CustomerReference",
         };
 
     private static readonly JsonSerializerOptions IndentedOptions = new() { WriteIndented = true };
@@ -153,6 +158,13 @@ public static class Redaction
     /// <summary>Keeps just enough of a value to recognise it, never enough to use it.</summary>
     internal static string MaskPartial(string value) =>
         value.Length <= 4 ? "***" : value[..2] + "***" + value[^2..];
+
+    /// <summary>
+    /// <see cref="MaskPartial"/> for a record's <c>PrintMembers</c>: null and empty print as
+    /// the compiler would print them, anything else masked.
+    /// </summary>
+    internal static string? MaskMember(string? value) =>
+        string.IsNullOrEmpty(value) ? value : MaskPartial(value);
 
     private static bool IsNullOrEmpty(JsonNode? node)
     {

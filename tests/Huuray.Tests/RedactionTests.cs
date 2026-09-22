@@ -247,3 +247,146 @@ public class RecordToStringRedactionTests
         }
     }
 }
+
+public class PurchaseOrderRedactionTests
+{
+    [Fact]
+    public void MasksFileNameAndCustomerReference_BothCarryPersonalNames()
+    {
+        JsonNode? output = Redaction.Redact(Fake.Json(
+            "{\"FileName\":\"purchase-order-jane-doe.pdf\",\"CustomerReference\":\"Jane Doe\",\"ArticleNumber\":\"ART-1\"}"));
+
+        Assert.Equal("pu***df", output!["FileName"]!.GetValue<string>());
+        Assert.Equal("Ja***oe", output["CustomerReference"]!.GetValue<string>());
+        Assert.Equal("ART-1", output["ArticleNumber"]!.GetValue<string>());
+        Assert.Contains("FileName", Redaction.SensitiveFieldNames);
+        Assert.Contains("CustomerReference", Redaction.SensitiveFieldNames);
+    }
+
+    [Fact]
+    public void CreateOrderRequestMasksTheCustomerReference_AndPrintsTheRestAsTheCompilerWould()
+    {
+        CreateOrderRequest request = new()
+        {
+            ProductToken = "tok",
+            Value = 5000,
+            Currency = "DKK",
+            Quantity = 2,
+            Expires = new DateTimeOffset(2027, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            RefId = "ref-1",
+            TemplateId = 42,
+            PdfTemplateUid = "pdf-1",
+            DeliveryDatetime = new DateTimeOffset(2026, 9, 1, 9, 0, 0, TimeSpan.Zero),
+            PersonalMessage = "Thanks",
+            Recipients = new[] { new Recipient { Name = "Jane", Email = "jane@example.com" } },
+            AdditionalReference = "PO-4711",
+            CustomerReference = "Jane Doe",
+            ArticleNumber = "ART-1",
+            Description = "Ten cards",
+            PurchaseOrderFileToken = "60050460-7a2d-42a8-a4dd-5cef88ad8374",
+        };
+
+        OrderTwin twin = new(
+            request.ProductToken, request.Value, request.Currency, request.Quantity, request.Expires, request.RefId,
+            request.TemplateId, request.PdfTemplateUid, request.DeliveryDatetime, request.PersonalMessage,
+            request.Recipients, request.AdditionalReference, "Ja***oe", request.ArticleNumber, request.Description,
+            request.PurchaseOrderFileToken);
+
+        Assert.Equal(twin.ToString().Replace(nameof(OrderTwin), nameof(CreateOrderRequest), StringComparison.Ordinal), request.ToString());
+        Assert.Equal(
+            "CreateOrderRequest { ProductToken = tok, Value = 5000, Currency = DKK, Quantity = 1, Expires = , RefId = , " +
+            "TemplateId = , PdfTemplateUid = , DeliveryDatetime = , PersonalMessage = , Recipients = , " +
+            "AdditionalReference = , CustomerReference = , ArticleNumber = , Description = , PurchaseOrderFileToken =  }",
+            OrdersTestData.Base.ToString());
+
+        foreach (string rendered in Renderings(request, (request with { Quantity = 3 }).ToString()))
+        {
+            Assert.DoesNotContain("Jane Doe", rendered, StringComparison.Ordinal);
+            Assert.Contains("CustomerReference = Ja***oe", rendered, StringComparison.Ordinal);
+            Assert.Contains("PurchaseOrderFileToken = 60050460-7a2d-42a8-a4dd-5cef88ad8374", rendered, StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
+    public void SendRewardRequestMasksTheCustomerReference_AndPrintsTheRestAsTheCompilerWould()
+    {
+        SendRewardRequest request = new()
+        {
+            ProductToken = "tok",
+            Value = 5000,
+            Currency = "DKK",
+            Recipient = new Recipient { Name = "Jane", Email = "jane@example.com" },
+            TemplateId = 42,
+            PdfTemplateUid = "pdf-1",
+            RefId = "ref-1",
+            Expires = new DateTimeOffset(2027, 1, 1, 0, 0, 0, TimeSpan.Zero),
+            DeliveryDatetime = new DateTimeOffset(2026, 9, 1, 9, 0, 0, TimeSpan.Zero),
+            PersonalMessage = "Thanks",
+            AdditionalReference = "PO-4711",
+            CustomerReference = "Jane Doe",
+            ArticleNumber = "ART-1",
+            Description = "One card",
+            PurchaseOrderFileToken = "60050460-7a2d-42a8-a4dd-5cef88ad8374",
+        };
+
+        RewardTwin twin = new(
+            request.ProductToken, request.Value, request.Currency, request.Recipient, request.TemplateId,
+            request.PdfTemplateUid, request.RefId, request.Expires, request.DeliveryDatetime, request.PersonalMessage,
+            request.AdditionalReference, "Ja***oe", request.ArticleNumber, request.Description, request.PurchaseOrderFileToken);
+
+        Assert.Equal(twin.ToString().Replace(nameof(RewardTwin), nameof(SendRewardRequest), StringComparison.Ordinal), request.ToString());
+
+        foreach (string rendered in Renderings(request, (request with { Value = 1 }).ToString()))
+        {
+            Assert.DoesNotContain("Jane Doe", rendered, StringComparison.Ordinal);
+            Assert.DoesNotContain("jane@example.com", rendered, StringComparison.Ordinal);
+        }
+    }
+
+    private static string[] Renderings(object value, string copy) => new[]
+    {
+        value.ToString()!,
+        $"{value}",
+        string.Format(CultureInfo.InvariantCulture, "{0}", value),
+        new StringBuilder().Append(value).ToString(),
+        copy,
+        new { Value = value }.ToString()!,
+    };
+
+    /// <summary>The same members in the same order, printed by the compiler.</summary>
+    private sealed record OrderTwin(
+        string ProductToken,
+        int Value,
+        string Currency,
+        int Quantity,
+        DateTimeOffset? Expires,
+        string? RefId,
+        int? TemplateId,
+        string? PdfTemplateUid,
+        DateTimeOffset? DeliveryDatetime,
+        string? PersonalMessage,
+        System.Collections.Generic.IReadOnlyList<Recipient>? Recipients,
+        string? AdditionalReference,
+        string? CustomerReference,
+        string? ArticleNumber,
+        string? Description,
+        string? PurchaseOrderFileToken);
+
+    /// <summary>The same members in the same order, printed by the compiler.</summary>
+    private sealed record RewardTwin(
+        string ProductToken,
+        int Value,
+        string Currency,
+        Recipient Recipient,
+        int TemplateId,
+        string? PdfTemplateUid,
+        string RefId,
+        DateTimeOffset? Expires,
+        DateTimeOffset? DeliveryDatetime,
+        string? PersonalMessage,
+        string? AdditionalReference,
+        string? CustomerReference,
+        string? ArticleNumber,
+        string? Description,
+        string? PurchaseOrderFileToken);
+}

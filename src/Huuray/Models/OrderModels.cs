@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Text;
 
 namespace Huuray;
 
@@ -171,6 +172,81 @@ public sealed record CreateOrderRequest
     /// either 1 or exactly <see cref="Quantity"/>.
     /// </summary>
     public IReadOnlyList<Recipient>? Recipients { get; init; }
+
+    /// <summary>An optional additional reference, shown on the invoice (max 250 characters).</summary>
+    /// <remarks>
+    /// Only accepted when Additional Reference is enabled for your account; otherwise the API
+    /// rejects the order with a 422, thrown as <see cref="HuurayValidationException"/>.
+    /// </remarks>
+    public string? AdditionalReference { get; init; }
+
+    /// <summary>
+    /// An optional customer reference, used as the customer contact on the invoice (max 250 characters).
+    /// </summary>
+    /// <remarks>
+    /// Only accepted when Customer Reference is enabled for your account; otherwise a 422.
+    /// Personal data, so <see cref="ToString"/> masks it.
+    /// </remarks>
+    public string? CustomerReference { get; init; }
+
+    /// <summary>An optional article number, shown on the invoice line (max 250 characters).</summary>
+    /// <remarks>Only accepted when Article Number is enabled for your account; otherwise a 422.</remarks>
+    public string? ArticleNumber { get; init; }
+
+    /// <summary>An optional description, shown on the invoice line (max 250 characters).</summary>
+    /// <remarks>Only accepted when Description is enabled for your account; otherwise a 422.</remarks>
+    public string? Description { get; init; }
+
+    /// <summary>
+    /// An optional purchase order file to attach to the invoice: the <see cref="UploadResult.Token"/>
+    /// returned by <c>Uploads.CreateAsync</c>.
+    /// </summary>
+    /// <remarks>
+    /// Only accepted when Purchase Order upload is enabled for your account; otherwise a 422.
+    /// The token is consumed by the order it is used with.
+    /// </remarks>
+    public string? PurchaseOrderFileToken { get; init; }
+
+    /// <summary>
+    /// Writes the members for the record's <c>ToString</c>, with <see cref="CustomerReference"/> masked.
+    /// </summary>
+    /// <remarks>Every other member is printed as the compiler would print it.</remarks>
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append("ProductToken = ");
+        builder.Append(ProductToken);
+        builder.Append(", Value = ");
+        builder.Append(Value.ToString());
+        builder.Append(", Currency = ");
+        builder.Append(Currency);
+        builder.Append(", Quantity = ");
+        builder.Append(Quantity.ToString());
+        builder.Append(", Expires = ");
+        builder.Append(Expires.ToString());
+        builder.Append(", RefId = ");
+        builder.Append(RefId);
+        builder.Append(", TemplateId = ");
+        builder.Append(TemplateId.ToString());
+        builder.Append(", PdfTemplateUid = ");
+        builder.Append(PdfTemplateUid);
+        builder.Append(", DeliveryDatetime = ");
+        builder.Append(DeliveryDatetime.ToString());
+        builder.Append(", PersonalMessage = ");
+        builder.Append(PersonalMessage);
+        builder.Append(", Recipients = ");
+        builder.Append(Recipients);
+        builder.Append(", AdditionalReference = ");
+        builder.Append(AdditionalReference);
+        builder.Append(", CustomerReference = ");
+        builder.Append(Redaction.MaskMember(CustomerReference));
+        builder.Append(", ArticleNumber = ");
+        builder.Append(ArticleNumber);
+        builder.Append(", Description = ");
+        builder.Append(Description);
+        builder.Append(", PurchaseOrderFileToken = ");
+        builder.Append(PurchaseOrderFileToken);
+        return true;
+    }
 }
 
 /// <summary>
@@ -226,6 +302,82 @@ public sealed record SendRewardRequest
 
     /// <summary>A message included in the email or SMS.</summary>
     public string? PersonalMessage { get; init; }
+
+    /// <summary>An optional additional reference, shown on the invoice (max 250 characters).</summary>
+    /// <remarks>
+    /// Only accepted when Additional Reference is enabled for your account; otherwise the API
+    /// rejects the order with a 422, thrown as <see cref="HuurayValidationException"/>.
+    /// </remarks>
+    public string? AdditionalReference { get; init; }
+
+    /// <summary>
+    /// An optional customer reference, used as the customer contact on the invoice (max 250 characters).
+    /// </summary>
+    /// <remarks>
+    /// Only accepted when Customer Reference is enabled for your account; otherwise a 422.
+    /// Personal data, so <see cref="ToString"/> masks it.
+    /// </remarks>
+    public string? CustomerReference { get; init; }
+
+    /// <summary>An optional article number, shown on the invoice line (max 250 characters).</summary>
+    /// <remarks>Only accepted when Article Number is enabled for your account; otherwise a 422.</remarks>
+    public string? ArticleNumber { get; init; }
+
+    /// <summary>An optional description, shown on the invoice line (max 250 characters).</summary>
+    /// <remarks>Only accepted when Description is enabled for your account; otherwise a 422.</remarks>
+    public string? Description { get; init; }
+
+    /// <summary>
+    /// An optional purchase order file to attach to the invoice: the <see cref="UploadResult.Token"/>
+    /// returned by <c>Uploads.CreateAsync</c>.
+    /// </summary>
+    /// <remarks>
+    /// Only accepted when Purchase Order upload is enabled for your account; otherwise a 422.
+    /// The token is consumed by the order it is used with.
+    /// </remarks>
+    public string? PurchaseOrderFileToken { get; init; }
+
+    /// <summary>
+    /// Writes the members for the record's <c>ToString</c>, with <see cref="CustomerReference"/> masked.
+    /// </summary>
+    /// <remarks>
+    /// Every other member is printed as the compiler would print it; <see cref="Recipient"/>
+    /// masks its own contact details.
+    /// </remarks>
+    private bool PrintMembers(StringBuilder builder)
+    {
+        builder.Append("ProductToken = ");
+        builder.Append(ProductToken);
+        builder.Append(", Value = ");
+        builder.Append(Value.ToString());
+        builder.Append(", Currency = ");
+        builder.Append(Currency);
+        builder.Append(", Recipient = ");
+        builder.Append(Recipient);
+        builder.Append(", TemplateId = ");
+        builder.Append(TemplateId.ToString());
+        builder.Append(", PdfTemplateUid = ");
+        builder.Append(PdfTemplateUid);
+        builder.Append(", RefId = ");
+        builder.Append(RefId);
+        builder.Append(", Expires = ");
+        builder.Append(Expires.ToString());
+        builder.Append(", DeliveryDatetime = ");
+        builder.Append(DeliveryDatetime.ToString());
+        builder.Append(", PersonalMessage = ");
+        builder.Append(PersonalMessage);
+        builder.Append(", AdditionalReference = ");
+        builder.Append(AdditionalReference);
+        builder.Append(", CustomerReference = ");
+        builder.Append(Redaction.MaskMember(CustomerReference));
+        builder.Append(", ArticleNumber = ");
+        builder.Append(ArticleNumber);
+        builder.Append(", Description = ");
+        builder.Append(Description);
+        builder.Append(", PurchaseOrderFileToken = ");
+        builder.Append(PurchaseOrderFileToken);
+        return true;
+    }
 }
 
 /// <summary>

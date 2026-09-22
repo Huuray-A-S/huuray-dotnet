@@ -208,6 +208,7 @@ public sealed class HuurayClient
         Stock = new StockResource(this);
         ExchangeRates = new ExchangeRatesResource(this);
         Orders = new OrdersResource(this);
+        Uploads = new UploadsResource(this);
     }
 
     /// <summary>Available balances on your B2B account. <c>GET /v4/Balance</c>.</summary>
@@ -227,6 +228,9 @@ public sealed class HuurayClient
 
     /// <summary>Ordering, searching, resending and cancelling.</summary>
     public OrdersResource Orders { get; }
+
+    /// <summary>Purchase order files for later orders. <c>POST /v4/Upload</c>.</summary>
+    public UploadsResource Uploads { get; }
 
     /// <summary>The <c>User-Agent</c> this client sends, before any suffix you add.</summary>
     internal static string SdkUserAgent { get; } = "huuray-dotnet/" + SdkVersion();
@@ -312,9 +316,10 @@ public sealed class HuurayClient
         HuurayResponse<JsonNode> response = await SendAsync<JsonNode>(
                 method,
                 path,
-                body?.ToJsonString(),
+                JsonContent(body?.ToJsonString()),
                 query: null,
                 retryable,
+                failureNote: null,
                 static (string text) => JsonNode.Parse(text),
                 cancellationToken)
             .ConfigureAwait(false);
@@ -333,7 +338,42 @@ public sealed class HuurayClient
         bool retryable,
         JsonTypeInfo<T> typeInfo,
         CancellationToken cancellationToken) =>
-        SendAsync(method, path, jsonBody, query, retryable, text => JsonSerializer.Deserialize(text, typeInfo), cancellationToken);
+        SendAsync(
+            method,
+            path,
+            JsonContent(jsonBody),
+            query,
+            retryable,
+            failureNote: null,
+            text => JsonSerializer.Deserialize(text, typeInfo),
+            cancellationToken);
+
+    /// <summary>
+    /// Signs and sends one request with a body that is not JSON, deserialising the response
+    /// with a source-generated contract.
+    /// </summary>
+    /// <remarks>
+    /// <paramref name="content"/> is called once per attempt: an <see cref="HttpContent"/>
+    /// cannot be sent again once its stream has been read. <paramref name="failureNote"/> is
+    /// appended to the message of a timeout, a connection failure or an unusable 2xx body.
+    /// </remarks>
+    internal Task<HuurayResponse<T>> SendAsync<T>(
+        HttpMethod method,
+        string path,
+        Func<HttpContent> content,
+        bool retryable,
+        string? failureNote,
+        JsonTypeInfo<T> typeInfo,
+        CancellationToken cancellationToken) =>
+        SendAsync(
+            method,
+            path,
+            content,
+            query: null,
+            retryable,
+            failureNote,
+            text => JsonSerializer.Deserialize(text, typeInfo),
+            cancellationToken);
 
     /// <summary>
     /// The one place a request is built, signed, sent, retried and mapped onto errors.
@@ -347,9 +387,10 @@ public sealed class HuurayClient
     private async Task<HuurayResponse<T>> SendAsync<T>(
         HttpMethod method,
         string path,
-        string? jsonBody,
+        Func<HttpContent>? content,
         string? query,
         bool retryable,
+        string? failureNote,
         Func<string, T?> parse,
         CancellationToken cancellationToken)
     {
@@ -386,9 +427,10 @@ public sealed class HuurayClient
             request.Headers.TryAddWithoutValidation("Accept", "application/json");
             request.Headers.TryAddWithoutValidation("User-Agent", _userAgent);
 
-            if (jsonBody is not null)
+            // Built afresh for every attempt, and disposed with the request.
+            if (content is not null)
             {
-                request.Content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
+                request.Content = content();
             }
 
             int httpStatus;
@@ -414,9 +456,9 @@ public sealed class HuurayClient
                 cancellationToken.ThrowIfCancellationRequested();
 
                 HuurayConnectionException error = exception is OperationCanceledException
-                    ? new HuurayTimeoutException(verb, path, _timeout, exception)
+                    ? new HuurayTimeoutException(verb, path, _timeout, failureNote, exception)
                     : new HuurayConnectionException(
-                        $"{verb} {path} failed to reach the Huuray API: {exception.Message}",
+                        WithNote($"{verb} {path} failed to reach the Huuray API: {exception.Message}", failureNote),
                         verb,
                         path,
                         exception);
@@ -451,15 +493,17 @@ public sealed class HuurayClient
                     // would then order a second time. The body itself is never included
                     // in the message: it could hold voucher codes.
                     HuurayConnectionException error = new(
-                        string.Format(
-                            CultureInfo.InvariantCulture,
-                            "{0} {1} returned HTTP {2} but the body was {3} ({4} bytes). " +
-                            "Treat the outcome as unknown rather than empty.",
-                            verb,
-                            path,
-                            httpStatus,
-                            text.Length == 0 ? "empty" : "not usable JSON",
-                            text.Length),
+                        WithNote(
+                            string.Format(
+                                CultureInfo.InvariantCulture,
+                                "{0} {1} returned HTTP {2} but the body was {3} ({4} bytes). " +
+                                "Treat the outcome as unknown rather than empty.",
+                                verb,
+                                path,
+                                httpStatus,
+                                text.Length == 0 ? "empty" : "not usable JSON",
+                                text.Length),
+                            failureNote),
                         verb,
                         path,
                         exception);
@@ -513,6 +557,13 @@ public sealed class HuurayClient
 
         return builder.Length == 0 ? null : builder.ToString();
     }
+
+    /// <summary>A factory for a JSON body, or <see langword="null"/> to send none.</summary>
+    private static Func<HttpContent>? JsonContent(string? jsonBody) =>
+        jsonBody is null ? null : () => new StringContent(jsonBody, Encoding.UTF8, "application/json");
+
+    private static string WithNote(string message, string? note) =>
+        note is null ? message : message + " " + note;
 
     private static JsonNode? TryParseJson(string text)
     {

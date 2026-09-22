@@ -50,6 +50,11 @@ public sealed class ExercisedSurface : IAsyncLifetime
                 new Recipient { Name = "A", Email = "a@example.com", RefId = "r-a" },
                 new Recipient { Name = "B", Phone = "+4512345678", RefId = "r-b" },
             },
+            AdditionalReference = "PO-4711",
+            CustomerReference = "Jane Doe",
+            ArticleNumber = "ART-1",
+            Description = "Two gift cards for the sales team",
+            PurchaseOrderFileToken = "60050460-7a2d-42a8-a4dd-5cef88ad8374",
         });
 
         await harness.Client.Orders.CreateSyncAsync(new CreateOrderRequest
@@ -65,6 +70,11 @@ public sealed class ExercisedSurface : IAsyncLifetime
             DeliveryDatetime = new DateTimeOffset(2026, 9, 1, 9, 0, 0, TimeSpan.Zero),
             PersonalMessage = "Thanks",
             Recipients = new[] { new Recipient { Name = "C", Email = "c@example.com", RefId = "r-c" } },
+            AdditionalReference = "PO-4712",
+            CustomerReference = "John Doe",
+            ArticleNumber = "ART-2",
+            Description = "One gift card",
+            PurchaseOrderFileToken = "70050460-7a2d-42a8-a4dd-5cef88ad8374",
         });
 
         await harness.Client.Orders.SendRewardAsync(new SendRewardRequest
@@ -79,6 +89,11 @@ public sealed class ExercisedSurface : IAsyncLifetime
             PersonalMessage = "Nice work",
             Expires = new DateTimeOffset(2027, 1, 1, 0, 0, 0, TimeSpan.Zero),
             DeliveryDatetime = new DateTimeOffset(2026, 9, 1, 9, 0, 0, TimeSpan.Zero),
+            AdditionalReference = "PO-4713",
+            CustomerReference = "Jane Doe",
+            ArticleNumber = "ART-3",
+            Description = "A reward",
+            PurchaseOrderFileToken = "80050460-7a2d-42a8-a4dd-5cef88ad8374",
         });
 
         await harness.Client.Orders.SearchAsync(new SearchOrdersRequest
@@ -98,6 +113,13 @@ public sealed class ExercisedSurface : IAsyncLifetime
 
         await harness.Client.Orders.ResendAsync(new ResendRequest { OrderUid = "uid", VoucherId = 7 });
         await harness.Client.Orders.CancelAsync(new CancelRequest { OrderUid = "uid", VoucherId = 7 });
+
+        await harness.Client.Uploads.CreateAsync(new CreateUploadRequest
+        {
+            File = Fake.PdfBytes,
+            FileName = "purchase-order-4711.pdf",
+            ContentType = "application/pdf",
+        });
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
@@ -186,9 +208,9 @@ public class CoverageGate : IClassFixture<ExercisedSurface>
     }
 
     [Fact]
-    public void CoversExactlyTheNineV4Operations_NoMoreAndNoFewer()
+    public void CoversExactlyTheTenV4Operations_NoMoreAndNoFewer()
     {
-        Assert.Equal(9, Spec.Operations().Count);
+        Assert.Equal(10, Spec.Operations().Count);
     }
 }
 
@@ -230,6 +252,40 @@ public class RequestConformanceGate : IClassFixture<ExercisedSurface>
     }
 
     [Fact]
+    public void ExercisesTheFivePurchaseOrderFieldsOnEveryOrderCall_SoTheGateValidatesThem()
+    {
+        string[] fields = { "AdditionalReference", "CustomerReference", "ArticleNumber", "Description", "PurchaseOrderFileToken" };
+        JsonObject declared = Spec.Schemas["OrderRequest"]!["properties"]!.AsObject();
+
+        List<CapturedRequest> orders = _surface.Calls
+            .Where(c => c.Method == "POST" && c.Path == "/v4/Order")
+            .ToList();
+
+        Assert.Equal(3, orders.Count);
+        foreach (string field in fields)
+        {
+            Assert.True(declared.ContainsKey(field), $"OrderRequest does not declare {field}");
+            foreach (CapturedRequest call in orders)
+            {
+                Assert.False(string.IsNullOrEmpty(call.BodyJson![field]?.GetValue<string>()), $"{field} was not exercised");
+            }
+        }
+    }
+
+    [Fact]
+    public void ExercisesUploadAsOneFilePart_SoTheGateValidatesItsParts()
+    {
+        CapturedRequest call = _surface.Calls.Single(c => c.Path == "/v4/Upload");
+
+        Assert.Equal("multipart/form-data", call.MediaType);
+        CapturedPart part = Assert.Single(call.Parts!);
+        Assert.Equal("File", part.Name);
+        Assert.Equal("purchase-order-4711.pdf", part.FileName);
+        Assert.Equal("application/pdf", part.ContentType);
+        Assert.Equal(Fake.PdfBytes.ToArray(), part.Content);
+    }
+
+    [Fact]
     public void SendsNoBodyToTemplate_WhichDeclaresNone()
     {
         CapturedRequest call = _surface.Calls.Single(c => c.Path == "/v4/Template");
@@ -260,6 +316,7 @@ public class PublicSurfaceInventory
         {
             "CancelAsync", "CreateAsync", "CreateSyncAsync", "ResendAsync", "SearchAsync", "SendRewardAsync",
         },
+        ["UploadsResource"] = new[] { "CreateAsync" },
     };
 
     [Fact]
@@ -274,6 +331,7 @@ public class PublicSurfaceInventory
             typeof(StockResource),
             typeof(ExchangeRatesResource),
             typeof(OrdersResource),
+            typeof(UploadsResource),
         };
 
         Dictionary<string, string[]> actual = new(StringComparer.Ordinal);

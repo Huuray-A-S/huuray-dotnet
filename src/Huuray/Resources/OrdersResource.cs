@@ -175,6 +175,11 @@ public sealed class OrdersResource
                 Expires = request.Expires,
                 DeliveryDatetime = request.DeliveryDatetime,
                 PersonalMessage = request.PersonalMessage,
+                AdditionalReference = request.AdditionalReference,
+                CustomerReference = request.CustomerReference,
+                ArticleNumber = request.ArticleNumber,
+                Description = request.Description,
+                PurchaseOrderFileToken = request.PurchaseOrderFileToken,
             },
             cancellationToken);
     }
@@ -418,6 +423,11 @@ public sealed class OrdersResource
             DeliveryDatetime = SpecFormats.ToSpecDateTime(request.DeliveryDatetime),
             PersonalMessage = request.PersonalMessage,
             Recipients = recipients,
+            AdditionalReference = request.AdditionalReference,
+            CustomerReference = request.CustomerReference,
+            ArticleNumber = request.ArticleNumber,
+            Description = request.Description,
+            PurchaseOrderFileToken = request.PurchaseOrderFileToken,
         };
 
         return JsonSerializer.Serialize(wire, HuurayJsonContext.Default.OrderRequestWire);

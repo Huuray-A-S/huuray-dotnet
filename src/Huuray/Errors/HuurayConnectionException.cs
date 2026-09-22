@@ -50,13 +50,20 @@ public sealed class HuurayTimeoutException : HuurayConnectionException
     /// <param name="timeout">The timeout that elapsed.</param>
     /// <param name="innerException">The cancellation exception that caused this one, if any.</param>
     public HuurayTimeoutException(string method, string path, TimeSpan timeout, Exception? innerException = null)
+        : this(method, path, timeout, note: null, innerException)
+    {
+    }
+
+    /// <summary>Creates a timeout exception whose message ends with <paramref name="note"/>.</summary>
+    internal HuurayTimeoutException(string method, string path, TimeSpan timeout, string? note, Exception? innerException)
         : base(
             string.Format(
                 CultureInfo.InvariantCulture,
-                "{0} {1} timed out after {2:0}ms.",
+                "{0} {1} timed out after {2:0}ms.{3}",
                 method,
                 path,
-                timeout.TotalMilliseconds),
+                timeout.TotalMilliseconds,
+                note is null ? string.Empty : " " + note),
             method,
             path,
             innerException)
