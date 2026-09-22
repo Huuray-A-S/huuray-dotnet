@@ -130,6 +130,33 @@ await huuray.Orders.CreateAsync(new CreateOrderRequest
 });
 ```
 
+## Attaching a purchase order
+
+An order can carry a purchase order file and four references for its invoice. Upload the file first, then pass its token with the order:
+
+```csharp
+UploadResult upload = await huuray.Uploads.CreateAsync(new CreateUploadRequest
+{
+    File        = await File.ReadAllBytesAsync("purchase-order-4711.pdf"),
+    FileName    = "purchase-order-4711.pdf",
+    ContentType = "application/pdf",        // optional; unset sends application/octet-stream
+});
+
+await huuray.Orders.CreateAsync(new CreateOrderRequest
+{
+    // … product, amount, quantity, delivery …
+    PurchaseOrderFileToken = upload.Token,  // consumed by this order
+    AdditionalReference    = "PO-4711",
+    CustomerReference      = "Jane Doe",
+    ArticleNumber          = "ART-1",
+    Description            = "Ten gift cards for the sales team",
+});
+```
+
+All five fields are optional and independent, and `SendRewardRequest` takes them too. Each is accepted only when the matching option is enabled on your account; otherwise the API answers 422, thrown as `HuurayValidationException`. The client sends every value as given and leaves length and content checks to the API.
+
+**Uploads are never retried.** Each upload stores a file that holds one of your account's pending upload slots until an order uses its token, and no call lists uploads. A timeout or a dropped connection throws the ordinary `HuurayTimeoutException` or `HuurayConnectionException` — not `HuurayIndeterminateOrderException` — and its message says the upload may still have been stored.
+
 ## Seven things worth knowing
 
 These are the parts of the API that are easy to get wrong. The client handles each one, but the behaviour is worth understanding.
@@ -264,7 +291,7 @@ new HuurayClient(new HuurayClientOptions { ApiToken = t, ApiSecret = s, HashEnco
 
 ## API coverage
 
-All nine v4 operations, and nothing else. Every method maps to one operation in the [Swagger reference](https://api.huuray.com/swagger/index.html):
+All ten v4 operations, and nothing else. Every method maps to one operation in the [Swagger reference](https://api.huuray.com/swagger/index.html):
 
 | Method | Endpoint |
 |---|---|
@@ -279,6 +306,7 @@ All nine v4 operations, and nothing else. Every method maps to one operation in 
 | `Orders.SearchAsync(…)` | `POST /v4/Search` |
 | `Orders.ResendAsync(…)` | `POST /v4/Resend` |
 | `Orders.CancelAsync(…)` | `DELETE /v4/Cancel` |
+| `Uploads.CreateAsync(…)` | `POST /v4/Upload` (`multipart/form-data`) |
 
 Need something not covered? `RequestAsync` signs any call for you:
 
@@ -309,7 +337,7 @@ Every exception derives from `HuurayException`.
 
 API exceptions carry `HttpStatus`, `Status`, `StatusMessage`, and the parsed `Body`. The client reads `StatusMessage` and falls back to the deprecated `Message`. The retained `Body` is redacted, so logging an exception can never leak a voucher code.
 
-Argument problems that this client catches before anything is sent — a fractional amount, a recipient count that is neither 1 nor `Quantity` when `TemplateId` is set, a synchronous order over 25 — throw `ArgumentException`. They are programming mistakes, not API responses.
+Argument problems that this client catches before anything is sent — a fractional amount, a recipient count that is neither 1 nor `Quantity` when `TemplateId` is set, a synchronous order over 25, an upload file name that cannot be sent in a header — throw `ArgumentException`. They are programming mistakes, not API responses.
 
 ## Client options
 

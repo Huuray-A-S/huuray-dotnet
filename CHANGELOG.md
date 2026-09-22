@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Purchase order files and references on orders.** `Uploads.CreateAsync(CreateUploadRequest)`
+  sends `POST /v4/Upload` as `multipart/form-data` with one `File` part and returns
+  `UploadResult` (`Token`, `FileName`, `ContentType`, `Size`). `CreateOrderRequest` and
+  `SendRewardRequest` accept `AdditionalReference`, `CustomerReference`, `ArticleNumber`,
+  `Description` and `PurchaseOrderFileToken`: omitted when unset, sent as given otherwise.
+- **Uploads are never retried.** A timeout or a dropped connection throws the ordinary
+  `HuurayTimeoutException` or `HuurayConnectionException`, whose message says the upload may
+  still have been stored and may hold a pending upload slot.
+- Without a `ContentType` the file part is sent as `application/octet-stream`. A `FileName` that
+  is empty, or holds a double quote or a control character, and a `ContentType` that is not a
+  media type throw `ArgumentException` before anything is sent, without quoting the value.
+- `FileName` and `CustomerReference` are treated as personal data: `Redaction` masks both, and
+  `CreateUploadRequest`, `UploadResult`, `CreateOrderRequest` and `SendRewardRequest` mask them
+  in `ToString()`. `CreateUploadRequest.ToString()` prints the file as `[N bytes]`.
+- The request-conformance gate validates `multipart/form-data` bodies part by part and fails
+  closed on any multipart shape it does not understand; the coverage gate expects ten operations.
+
 ### Changed
 
 - **`Timeout` must be between 1 and 4294967294 milliseconds**, the range
