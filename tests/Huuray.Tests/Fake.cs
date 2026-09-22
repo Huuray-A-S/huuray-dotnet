@@ -64,6 +64,13 @@ public static class Fake
     /// <summary>Parses a JSON literal for use as a canned response body.</summary>
     public static JsonNode Json(string json) => JsonNode.Parse(json)!;
 
+    /// <summary>
+    /// A stand-in purchase order file, fresh on every read. Not a real PDF: its bytes break any
+    /// text decoding — NUL, 0xFF, a lone 0x80, a line break and a boundary-like <c>--</c> — so a
+    /// test can tell that they arrived intact.
+    /// </summary>
+    public static byte[] PdfBytes => [.. "%PDF-1.7\n"u8, 0x00, 0xFF, 0x80, 0x0D, 0x0A, 0x2D, 0x2D, .. "\n%%EOF"u8];
+
     private static TestHarness Build(
         RecordingHandler handler,
         RetryOptions? retry,

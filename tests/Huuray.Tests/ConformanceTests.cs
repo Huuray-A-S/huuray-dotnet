@@ -1,8 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Reflection;
 using System.Text.Json.Nodes;
+using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -202,21 +205,7 @@ public class RequestConformanceGate : IClassFixture<ExercisedSurface>
 
         foreach (CapturedRequest call in _surface.Calls)
         {
-            JsonObject? schema = Spec.RequestBodySchema(call.Method, call.Path);
-
-            if (schema is null)
-            {
-                // The spec declares no body for this operation, so the SDK must send none.
-                if (!call.BodyOmitted)
-                {
-                    failures.Add(
-                        $"{call.Method} {call.Path}: the spec declares no requestBody, but the SDK sent one");
-                }
-
-                continue;
-            }
-
-            failures.AddRange(Spec.Validate(schema, call.BodyJson, $"{call.Method} {call.Path}"));
+            failures.AddRange(Spec.ValidateRequestBody(Spec.RequestBody(call.Method, call.Path), call));
         }
 
         Assert.True(failures.Count == 0, string.Join("\n", failures));
@@ -374,5 +363,181 @@ public class TheGatesThemselvesWork
             Fake.Json("{\"OrderUID\":\"x\",\"VoucherID\":7}"));
 
         Assert.Empty(errors);
+    }
+
+    /* ------------------------------------------------------------ multipart */
+
+    private const string BinaryFileSchema =
+        "{\"type\":\"object\",\"properties\":{\"File\":{\"type\":\"string\",\"format\":\"binary\"}}}";
+
+    [Fact]
+    public async Task AcceptsAValidMultipartBody()
+    {
+        CapturedRequest call = await Capture("/v4/Upload", Multipart(FilePart()));
+
+        Assert.Empty(Spec.ValidateRequestBody(Spec.RequestBody("POST", "/v4/Upload"), call));
+    }
+
+    [Fact]
+    public async Task FlagsAnUndeclaredPart()
+    {
+        CapturedRequest call = await Capture("/v4/Upload", Multipart(FilePart(), FilePart(name: "Invented")));
+
+        List<string> errors = Spec.ValidateRequestBody(Spec.RequestBody("POST", "/v4/Upload"), call);
+
+        Assert.Contains(errors, error => error.Contains("Invented", StringComparison.Ordinal)
+            && error.Contains("not defined in the spec", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task FlagsAPartSentTwice()
+    {
+        CapturedRequest call = await Capture("/v4/Upload", Multipart(FilePart(), FilePart()));
+
+        List<string> errors = Spec.ValidateRequestBody(Spec.RequestBody("POST", "/v4/Upload"), call);
+
+        Assert.Contains(errors, error => error.Contains("File: sent 2 times", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task FlagsAMissingRequiredPart()
+    {
+        CapturedRequest call = await Capture("/v4/Upload", Multipart(FilePart()));
+        JsonObject media = Fake.Json(
+            "{\"schema\":{\"type\":\"object\",\"required\":[\"File\",\"Second\"],\"properties\":{" +
+            "\"File\":{\"type\":\"string\",\"format\":\"binary\"},\"Second\":{\"type\":\"string\",\"format\":\"binary\"}}}}").AsObject();
+
+        List<string> errors = Spec.ValidateMultipart(media, call);
+
+        Assert.Contains(errors, error => error.Contains("Second: required by the spec but not sent", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task FlagsABinaryPartSentWithoutAFilename()
+    {
+        CapturedRequest call = await Capture("/v4/Upload", Multipart(FilePart(fileName: null)));
+
+        List<string> errors = Spec.ValidateRequestBody(Spec.RequestBody("POST", "/v4/Upload"), call);
+
+        Assert.Contains(errors, error => error.Contains("with a filename", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task FlagsABinaryPartSentWithoutItsOwnContentType()
+    {
+        CapturedRequest call = await Capture("/v4/Upload", Multipart(FilePart(contentType: null)));
+
+        List<string> errors = Spec.ValidateRequestBody(Spec.RequestBody("POST", "/v4/Upload"), call);
+
+        Assert.Contains(errors, error => error.Contains("its own Content-Type", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task FlagsABinaryPartSentWithATransferEncoding()
+    {
+        ByteArrayContent part = FilePart();
+        part.Headers.TryAddWithoutValidation("Content-Transfer-Encoding", "base64");
+        CapturedRequest call = await Capture("/v4/Upload", Multipart(part));
+
+        List<string> errors = Spec.ValidateRequestBody(Spec.RequestBody("POST", "/v4/Upload"), call);
+
+        Assert.Contains(errors, error => error.Contains("not as raw binary", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("{\"schema\":{\"type\":\"object\",\"properties\":{\"File\":{\"type\":\"string\"}}}}")]
+    [InlineData("{\"schema\":{\"type\":\"object\",\"properties\":{\"File\":{\"type\":\"string\",\"format\":\"binary\",\"nullable\":true}}}}")]
+    [InlineData("{\"schema\":{\"allOf\":[" + BinaryFileSchema + "]}}")]
+    [InlineData("{\"schema\":{\"type\":\"object\",\"additionalProperties\":false,\"properties\":{\"File\":{\"type\":\"string\",\"format\":\"binary\"}}}}")]
+    [InlineData("{\"schema\":" + BinaryFileSchema + ",\"encoding\":{\"File\":{\"style\":\"form\",\"contentType\":\"application/pdf\"}}}")]
+    [InlineData("{\"schema\":" + BinaryFileSchema + ",\"encoding\":{\"File\":{\"style\":\"form\",\"explode\":true}}}")]
+    [InlineData("{\"schema\":" + BinaryFileSchema + ",\"encoding\":{\"File\":{\"style\":\"spaceDelimited\"}}}")]
+    [InlineData("{\"schema\":" + BinaryFileSchema + ",\"encoding\":{\"Other\":{\"style\":\"form\"}}}")]
+    [InlineData("{\"schema\":" + BinaryFileSchema + ",\"examples\":{}}")]
+    [InlineData("{\"encoding\":{}}")]
+    public async Task FailsClosedOnAMultipartShapeItDoesNotUnderstand(string media)
+    {
+        CapturedRequest call = await Capture("/v4/Upload", Multipart(FilePart()));
+
+        List<string> errors = Spec.ValidateMultipart(Fake.Json(media).AsObject(), call);
+
+        Assert.Contains(errors, error => error.Contains("extend Spec.ValidateMultipart", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task FailsClosedOnAMediaTypeItDoesNotUnderstand()
+    {
+        CapturedRequest call = await Capture("/v4/Upload", Multipart(FilePart()));
+        JsonObject requestBody = Fake.Json(
+            "{\"content\":{\"application/x-www-form-urlencoded\":{\"schema\":" + BinaryFileSchema + "}}}").AsObject();
+
+        List<string> errors = Spec.ValidateRequestBody(requestBody, call);
+
+        Assert.Contains(errors, error => error.Contains("does not handle", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task NeverParsesAMultipartBodyAsJson_AMismatchIsAFailureNotAnException()
+    {
+        CapturedRequest call = await Capture("/v4/Order", Multipart(FilePart()));
+
+        List<string> errors = Spec.ValidateRequestBody(Spec.RequestBody("POST", "/v4/Order"), call);
+
+        Assert.Null(call.BodyJson);
+        Assert.Contains(errors, error => error.Contains("sent multipart/form-data", StringComparison.Ordinal)
+            && error.Contains("application/json", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task FlagsAJsonBodySentToAMultipartOperation()
+    {
+        CapturedRequest call = await Capture(
+            "/v4/Upload",
+            new StringContent("{\"File\":\"x\"}", System.Text.Encoding.UTF8, "application/json"));
+
+        List<string> errors = Spec.ValidateRequestBody(Spec.RequestBody("POST", "/v4/Upload"), call);
+
+        Assert.Contains(errors, error => error.Contains("sent application/json", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task FlagsAMultipartBodyThatIsNotWellFormed()
+    {
+        StringContent garbage = new("not multipart at all");
+        garbage.Headers.ContentType = MediaTypeHeaderValue.Parse("multipart/form-data; boundary=abc");
+        CapturedRequest call = await Capture("/v4/Upload", garbage);
+
+        List<string> errors = Spec.ValidateRequestBody(Spec.RequestBody("POST", "/v4/Upload"), call);
+
+        Assert.Contains(errors, error => error.Contains("not well-formed", StringComparison.Ordinal));
+    }
+
+    private static async Task<CapturedRequest> Capture(string path, HttpContent content)
+    {
+        using HttpRequestMessage request = new(HttpMethod.Post, "https://api.huuray.com" + path) { Content = content };
+        return await CapturedRequest.CaptureAsync(request, CancellationToken.None);
+    }
+
+    private static ByteArrayContent FilePart(string name = "File", string? fileName = "po.pdf", string? contentType = "application/pdf")
+    {
+        ByteArrayContent part = new(Fake.PdfBytes);
+        if (contentType is not null)
+        {
+            part.Headers.ContentType = new MediaTypeHeaderValue(contentType);
+        }
+
+        part.Headers.ContentDisposition = new ContentDispositionHeaderValue("form-data") { Name = name, FileName = fileName };
+        return part;
+    }
+
+    private static MultipartFormDataContent Multipart(params HttpContent[] parts)
+    {
+        MultipartFormDataContent content = new();
+        foreach (HttpContent part in parts)
+        {
+            content.Add(part);
+        }
+
+        return content;
     }
 }
