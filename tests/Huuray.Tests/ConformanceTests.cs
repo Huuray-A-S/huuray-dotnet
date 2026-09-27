@@ -120,6 +120,25 @@ public sealed class ExercisedSurface : IAsyncLifetime
             FileName = "purchase-order-4711.pdf",
             ContentType = "application/pdf",
         });
+
+        // Every PdfRequest field between the two: Combine true on one and false on the other.
+        await harness.Client.Pdfs.GetAsync(new GetPdfRequest
+        {
+            OrderUid = "uid",
+            VoucherId = 7,
+            PdfTemplateUid = "pdf-template-uid-1",
+            Combine = true,
+        });
+
+        await harness.Client.Pdfs.GetWhenReadyAsync(
+            new GetPdfRequest
+            {
+                OrderUid = "uid",
+                VoucherId = 8,
+                PdfTemplateUid = "pdf-template-uid-2",
+                Combine = false,
+            },
+            TimeSpan.FromMinutes(1));
     }
 
     public Task DisposeAsync() => Task.CompletedTask;
@@ -208,9 +227,9 @@ public class CoverageGate : IClassFixture<ExercisedSurface>
     }
 
     [Fact]
-    public void CoversExactlyTheTenV4Operations_NoMoreAndNoFewer()
+    public void CoversExactlyTheElevenV4Operations_NoMoreAndNoFewer()
     {
-        Assert.Equal(10, Spec.Operations().Count);
+        Assert.Equal(11, Spec.Operations().Count);
     }
 }
 
@@ -286,6 +305,26 @@ public class RequestConformanceGate : IClassFixture<ExercisedSurface>
     }
 
     [Fact]
+    public void ExercisesEveryPdfRequestField_SoTheGateValidatesThem()
+    {
+        JsonObject schema = Spec.Schemas["PdfRequest"]!.AsObject();
+        Assert.Contains(schema["required"]!.AsArray(), name => name!.GetValue<string>() == "OrderUID");
+
+        List<JsonObject> bodies = _surface.Calls
+            .Where(c => c.Method == "POST" && c.Path == "/v4/Pdf")
+            .Select(c => c.BodyJson!.AsObject())
+            .ToList();
+
+        Assert.Equal(2, bodies.Count);
+        foreach (KeyValuePair<string, JsonNode?> property in schema["properties"]!.AsObject())
+        {
+            Assert.All(bodies, body => Assert.NotNull(body[property.Key]));
+        }
+
+        Assert.Equal(new[] { true, false }, bodies.Select(body => body["Combine"]!.GetValue<bool>()));
+    }
+
+    [Fact]
     public void SendsNoBodyToTemplate_WhichDeclaresNone()
     {
         CapturedRequest call = _surface.Calls.Single(c => c.Path == "/v4/Template");
@@ -317,6 +356,7 @@ public class PublicSurfaceInventory
             "CancelAsync", "CreateAsync", "CreateSyncAsync", "ResendAsync", "SearchAsync", "SendRewardAsync",
         },
         ["UploadsResource"] = new[] { "CreateAsync" },
+        ["PdfsResource"] = new[] { "GetAsync", "GetWhenReadyAsync" },
     };
 
     [Fact]
@@ -332,6 +372,7 @@ public class PublicSurfaceInventory
             typeof(ExchangeRatesResource),
             typeof(OrdersResource),
             typeof(UploadsResource),
+            typeof(PdfsResource),
         };
 
         Dictionary<string, string[]> actual = new(StringComparer.Ordinal);
@@ -374,6 +415,30 @@ public class TheGatesThemselvesWork
 
         Assert.Contains(errors, error => error.Contains("OrderUID", StringComparison.Ordinal)
             && error.Contains("required", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void FlagsAPdfRequestWithoutItsRequiredOrderUID()
+    {
+        List<string> errors = Spec.Validate(
+            Spec.Schemas["PdfRequest"]!,
+            Fake.Json("{\"VoucherID\":7,\"PDFTemplateUid\":\"x\",\"Combine\":true}"));
+
+        Assert.Contains(errors, error => error.Contains("OrderUID", StringComparison.Ordinal)
+            && error.Contains("required", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void FlagsAPdfRequestFieldOfTheWrongType()
+    {
+        List<string> errors = Spec.Validate(
+            Spec.Schemas["PdfRequest"]!,
+            Fake.Json("{\"OrderUID\":\"x\",\"VoucherID\":\"7\",\"Combine\":\"yes\"}"));
+
+        Assert.Contains(errors, error => error.Contains("VoucherID", StringComparison.Ordinal)
+            && error.Contains("expected integer", StringComparison.Ordinal));
+        Assert.Contains(errors, error => error.Contains("Combine", StringComparison.Ordinal)
+            && error.Contains("expected boolean", StringComparison.Ordinal));
     }
 
     [Fact]

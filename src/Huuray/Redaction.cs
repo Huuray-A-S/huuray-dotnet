@@ -30,8 +30,10 @@ public static class Redaction
 
     private const string TooDeepMarker = "[redacted: too deep]";
 
+    // Content is a gift card PDF from /v4/Pdf, as base64: it carries the code, and
+    // depending on the template the CVV and QR codes.
     private static readonly HashSet<string> SecretFields =
-        new(StringComparer.OrdinalIgnoreCase) { "Code", "CVV", "RedeemLink" };
+        new(StringComparer.OrdinalIgnoreCase) { "Code", "CVV", "RedeemLink", "Content" };
 
     private static readonly HashSet<string> SensitiveFields =
         new(StringComparer.OrdinalIgnoreCase)

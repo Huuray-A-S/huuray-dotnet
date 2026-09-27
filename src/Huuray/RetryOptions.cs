@@ -19,12 +19,12 @@ namespace Huuray;
 /// <list type="table">
 ///   <listheader><term>Retried</term><description>Never retried</description></listheader>
 ///   <item>
-///     <term>Balance, Catalogue, Template, Stock, ExchangeRates, Search</term>
-///     <description>Order, Resend, Cancel</description>
+///     <term>Balance, Catalogue, Template, Stock, ExchangeRates, Search, Pdf</term>
+///     <description>Order, Resend, Cancel, Upload</description>
 ///   </item>
 /// </list>
 /// <para>
-/// Note that four of the retried operations are POSTs. They are POSTs because they take
+/// Note that five of the retried operations are POSTs. They are POSTs because they take
 /// a request body, not because they change anything.
 /// </para>
 /// <para>

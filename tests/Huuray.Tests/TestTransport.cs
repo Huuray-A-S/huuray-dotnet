@@ -266,6 +266,9 @@ public sealed record MockResponse
     /// <summary>Raw body text; takes precedence over <see cref="Json"/>. Use to simulate garbled responses.</summary>
     public string? Text { get; init; }
 
+    /// <summary>A <c>Retry-After</c> header, added as given, so an unparseable value reaches the SDK too.</summary>
+    public string? RetryAfter { get; init; }
+
     /// <summary>Throw instead of responding, to simulate a network failure before headers arrive.</summary>
     public Exception? Throws { get; init; }
 
@@ -361,6 +364,11 @@ public sealed class RecordingHandler : HttpMessageHandler
         string text = mock.Text ?? (mock.Json?.ToJsonString() ?? "{}");
 
         HttpResponseMessage response = new((HttpStatusCode)mock.Status);
+        if (mock.RetryAfter is not null)
+        {
+            response.Headers.TryAddWithoutValidation("Retry-After", mock.RetryAfter);
+        }
+
         if (mock.BodyThrows is not null)
         {
             response.Content = new StreamContent(new FailingStream(mock.BodyThrows));

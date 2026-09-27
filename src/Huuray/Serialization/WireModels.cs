@@ -167,6 +167,22 @@ internal sealed class CancelRequestWire
     public int? VoucherID { get; set; }
 }
 
+/// <summary>Request body of <c>POST /v4/Pdf</c>: mirrors <c>PdfRequest</c>.</summary>
+internal sealed class PdfRequestWire
+{
+    [JsonPropertyName("OrderUID")]
+    public string OrderUID { get; set; } = string.Empty;
+
+    [JsonPropertyName("VoucherID")]
+    public int? VoucherID { get; set; }
+
+    [JsonPropertyName("PDFTemplateUid")]
+    public string? PDFTemplateUid { get; set; }
+
+    [JsonPropertyName("Combine")]
+    public bool? Combine { get; set; }
+}
+
 /* ------------------------------------------------------------------ responses */
 
 internal sealed class BalanceItemWire
@@ -415,4 +431,43 @@ internal sealed class UploadResponseWire
 
     [JsonPropertyName("Size")]
     public long? Size { get; set; }
+}
+
+/// <summary>Mirrors <c>PdfDocument</c>.</summary>
+internal sealed class PdfDocumentWire
+{
+    [JsonPropertyName("VoucherIDs")]
+    public List<int>? VoucherIDs { get; set; }
+
+    [JsonPropertyName("PDFTemplateUid")]
+    public string? PDFTemplateUid { get; set; }
+
+    [JsonPropertyName("FileName")]
+    public string? FileName { get; set; }
+
+    [JsonPropertyName("ContentType")]
+    public string? ContentType { get; set; }
+
+    /// <summary>
+    /// The specification's base64 string, decoded by the serialiser. Text that is not valid
+    /// base64 fails the parse, so the response counts as unusable, like a truncated body.
+    /// </summary>
+    [JsonPropertyName("Content")]
+    public byte[]? Content { get; set; }
+}
+
+/// <summary>
+/// Mirrors <c>PdfResponse</c>, answered with both 200 and 202. <c>StatusMessage</c> is kept for
+/// the message of a wait that gives up; <c>Status</c> and the deprecated <c>Message</c> are not read.
+/// </summary>
+internal sealed class PdfResponseWire
+{
+    [JsonPropertyName("OrderUID")]
+    public string? OrderUID { get; set; }
+
+    [JsonPropertyName("Documents")]
+    public List<PdfDocumentWire>? Documents { get; set; }
+
+    [JsonPropertyName("StatusMessage")]
+    public string? StatusMessage { get; set; }
 }

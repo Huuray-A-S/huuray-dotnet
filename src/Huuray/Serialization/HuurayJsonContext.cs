@@ -20,6 +20,7 @@ namespace Huuray.Serialization;
 [JsonSerializable(typeof(SearchRequestWire))]
 [JsonSerializable(typeof(ResendRequestWire))]
 [JsonSerializable(typeof(CancelRequestWire))]
+[JsonSerializable(typeof(PdfRequestWire))]
 [JsonSerializable(typeof(BalanceResponseWire))]
 [JsonSerializable(typeof(CatalogueResponseWire))]
 [JsonSerializable(typeof(TemplateResponseWire))]
@@ -29,6 +30,7 @@ namespace Huuray.Serialization;
 [JsonSerializable(typeof(ResendResponseWire))]
 [JsonSerializable(typeof(CancelResponseWire))]
 [JsonSerializable(typeof(UploadResponseWire))]
+[JsonSerializable(typeof(PdfResponseWire))]
 internal sealed partial class HuurayJsonContext : JsonSerializerContext
 {
 }

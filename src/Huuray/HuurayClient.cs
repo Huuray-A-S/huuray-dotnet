@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
@@ -209,6 +210,7 @@ public sealed class HuurayClient
         ExchangeRates = new ExchangeRatesResource(this);
         Orders = new OrdersResource(this);
         Uploads = new UploadsResource(this);
+        Pdfs = new PdfsResource(this);
     }
 
     /// <summary>Available balances on your B2B account. <c>GET /v4/Balance</c>.</summary>
@@ -231,6 +233,9 @@ public sealed class HuurayClient
 
     /// <summary>Purchase order files for later orders. <c>POST /v4/Upload</c>.</summary>
     public UploadsResource Uploads { get; }
+
+    /// <summary>The gift card PDFs of previous orders. <c>POST /v4/Pdf</c>.</summary>
+    public PdfsResource Pdfs { get; }
 
     /// <summary>The <c>User-Agent</c> this client sends, before any suffix you add.</summary>
     internal static string SdkUserAgent { get; } = "huuray-dotnet/" + SdkVersion();
@@ -435,6 +440,7 @@ public sealed class HuurayClient
 
             int httpStatus;
             string text;
+            RetryConditionHeaderValue? retryAfter;
             HttpResponseMessage? response = null;
             try
             {
@@ -448,6 +454,9 @@ public sealed class HuurayClient
                     .ConfigureAwait(false);
 
                 httpStatus = (int)response.StatusCode;
+
+                // Read before the response is disposed. An unparseable value reads as null.
+                retryAfter = response.Headers.RetryAfter;
                 text = await response.Content.ReadAsStringAsync(timeoutSource.Token).ConfigureAwait(false);
             }
             catch (Exception exception)
@@ -517,7 +526,7 @@ public sealed class HuurayClient
                     throw error;
                 }
 
-                return new HuurayResponse<T>(data, httpStatus);
+                return new HuurayResponse<T>(data, httpStatus, retryAfter);
             }
 
             HuurayApiException apiError = HuurayApiException.Create(httpStatus, TryParseJson(text), verb, path);
