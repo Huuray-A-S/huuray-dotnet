@@ -30,7 +30,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `OrderUid`, `Documents`, `RetryAfter`). Each `PdfDocument` carries `VoucherIds`,
   `PdfTemplateUid`, `FileName`, `ContentType` and `Content`, the PDF decoded from base64.
   `Ready` is `true` on 200 and `false` on 202, the API's "not ready yet"; `RetryAfter` is the
-  `Retry-After` header in whole seconds, sent as seconds or as a date, or null.
+  `Retry-After` header in whole seconds, or null when absent or not whole seconds.
 - `Pdfs.GetWhenReadyAsync(GetPdfRequest, maxWait, CancellationToken)` asks again after each 202
   with a new signed request, waiting `RetryAfter` or 30 seconds, and throws
   `HuurayTimeoutException` with the last `StatusMessage` before a wait would pass `maxWait`

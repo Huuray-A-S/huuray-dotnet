@@ -53,9 +53,9 @@ public sealed record GetPdfRequest
 /// <param name="OrderUid">The order's unique identifier.</param>
 /// <param name="Documents">The PDFs: one per voucher, or a single one when <c>Combine</c> was set.</param>
 /// <param name="RetryAfter">
-/// The response's <c>Retry-After</c> header, in whole seconds and never negative, or
-/// <see langword="null"/> when it was absent or could not be read. The API sends it with
-/// <c>202</c>.
+/// The response's <c>Retry-After</c> header in whole seconds, or <see langword="null"/> when it
+/// was absent or not whole seconds: an HTTP-date, a negative value and a fraction all read as
+/// <see langword="null"/>. The API sends it with <c>202</c>.
 /// </param>
 public sealed record PdfResult(
     bool Ready,

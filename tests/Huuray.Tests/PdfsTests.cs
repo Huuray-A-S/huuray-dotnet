@@ -85,11 +85,7 @@ internal static class PdfsTestData
 /// </summary>
 internal sealed class ManualClock : TimeProvider
 {
-    private readonly DateTimeOffset _start;
     private long _ticks;
-
-    internal ManualClock(DateTimeOffset? start = null) =>
-        _start = start ?? new DateTimeOffset(2026, 9, 27, 12, 0, 0, TimeSpan.Zero);
 
     /// <summary>Every wait asked for, in order.</summary>
     internal List<TimeSpan> Waits { get; } = new();
@@ -100,8 +96,6 @@ internal sealed class ManualClock : TimeProvider
     public override long TimestampFrequency => TimeSpan.TicksPerSecond;
 
     public override long GetTimestamp() => _ticks;
-
-    public override DateTimeOffset GetUtcNow() => _start + TimeSpan.FromTicks(_ticks);
 
     internal Task DelayAsync(TimeSpan wait, CancellationToken cancellationToken)
     {
@@ -306,26 +300,16 @@ public class PdfResultTests
         Assert.Null(result.RetryAfter);
     }
 
-    [Fact]
-    public async Task ReadsAnHttpDateRetryAfter_AsTheWholeSecondsUntilThen_RoundedUp()
+    [Theory]
+    [InlineData("Fri, 01 Jan 2100 00:00:00 GMT")]
+    [InlineData("Sat, 26 Sep 2026 12:00:00 GMT")]
+    public async Task ReadsAnHttpDateRetryAfter_InTheFutureOrThePast_AsNull_WholeSecondsOnly(string date)
     {
-        ManualClock clock = new(new DateTimeOffset(2026, 9, 27, 12, 0, 0, 500, TimeSpan.Zero));
-        TestHarness harness = Fake.Client(PdfsTestData.NotReady("Sun, 27 Sep 2026 12:01:30 GMT"));
+        TestHarness harness = Fake.Client(PdfsTestData.NotReady(date));
 
-        PdfResult result = await clock.For(harness).GetAsync(PdfsTestData.Request);
+        PdfResult result = await harness.Client.Pdfs.GetAsync(PdfsTestData.Request);
 
-        Assert.Equal(TimeSpan.FromSeconds(90), result.RetryAfter);
-    }
-
-    [Fact]
-    public async Task ReadsAnHttpDateInThePast_AsZero_NeverNegative()
-    {
-        ManualClock clock = new();
-        TestHarness harness = Fake.Client(PdfsTestData.NotReady("Sat, 26 Sep 2026 12:00:00 GMT"));
-
-        PdfResult result = await clock.For(harness).GetAsync(PdfsTestData.Request);
-
-        Assert.Equal(TimeSpan.Zero, result.RetryAfter);
+        Assert.Null(result.RetryAfter);
     }
 
     [Fact]
@@ -586,17 +570,19 @@ public class PdfGetWhenReadyTests
     [Fact]
     public async Task NeverWaitsANegativeTime()
     {
+        // A negative value and a date in the past both read as null, so each waits the
+        // default rather than no time at all.
         ManualClock clock = new();
         TestHarness harness = Fake.ClientWithQueue(new[]
         {
-            PdfsTestData.NotReady("0"),
+            PdfsTestData.NotReady("-5"),
             PdfsTestData.NotReady("Sat, 26 Sep 2026 12:00:00 GMT"),
             PdfsTestData.ReadyOne,
         });
 
         await clock.For(harness).GetWhenReadyAsync(PdfsTestData.Request);
 
-        Assert.Equal(new[] { TimeSpan.Zero, TimeSpan.Zero }, clock.Waits);
+        Assert.Equal(new[] { TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30) }, clock.Waits);
     }
 
     [Fact]

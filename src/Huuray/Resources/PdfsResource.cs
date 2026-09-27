@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -216,33 +215,15 @@ public sealed class PdfsResource
                 item.Content));
         }
 
+        // Retry-After in whole seconds only. An HTTP-date reads as null like any other value
+        // that is not whole seconds; a negative value or a fraction never parses at all.
         PdfResult result = new(
             response.HttpStatus == 200,
             response.Data?.OrderUID,
             documents,
-            ReadRetryAfter(response.RetryAfter));
+            response.RetryAfter?.Delta);
 
         return (result, response.Data?.StatusMessage);
-    }
-
-    /// <summary>
-    /// <c>Retry-After</c> as whole seconds, never negative: the seconds as sent, or the time left
-    /// until the date sent, rounded up.
-    /// </summary>
-    private TimeSpan? ReadRetryAfter(RetryConditionHeaderValue? header)
-    {
-        if (header?.Delta is TimeSpan delta)
-        {
-            return delta;
-        }
-
-        if (header?.Date is DateTimeOffset date)
-        {
-            double seconds = Math.Ceiling((date - _time.GetUtcNow()).TotalSeconds);
-            return TimeSpan.FromSeconds(Math.Clamp(seconds, 0, int.MaxValue));
-        }
-
-        return null;
     }
 
     private static string NotReadyNote(TimeSpan wait, string? statusMessage) =>
