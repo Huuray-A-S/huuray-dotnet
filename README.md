@@ -157,6 +157,22 @@ All five fields are optional and independent, and `SendRewardRequest` takes them
 
 **Uploads are never retried.** Each upload stores a file that holds one of your account's pending upload slots until an order uses its token or the upload is cleaned up, and no call lists uploads. A timeout or a dropped connection throws the ordinary `HuurayTimeoutException` or `HuurayConnectionException` — not `HuurayIndeterminateOrderException` — and its message says the upload may still have been stored.
 
+## Fetching a gift card PDF
+
+`Pdfs.GetAsync` asks once for the gift card PDF of an order: one document per voucher, or one for them all with `Combine = true`. While the order is still being processed, or a supplier has not delivered a code yet, the API answers `202`, which arrives as `Ready == false` with no documents and a `RetryAfter`. `Pdfs.GetWhenReadyAsync` does the asking for you: it waits `RetryAfter` (30 seconds when none is sent) between signed requests, and throws `HuurayTimeoutException` with the API's last status before a wait would pass `maxWait` (10 minutes by default):
+
+```csharp
+PdfResult pdf = await huuray.Pdfs.GetWhenReadyAsync(
+    new GetPdfRequest { OrderUid = orderUid },   // VoucherId, PdfTemplateUid and Combine are optional
+    maxWait: TimeSpan.FromMinutes(5));
+
+PdfDocument document = pdf.Documents[0];         // FileName, VoucherIds, and Content: the PDF's bytes
+```
+
+**The PDF is a bearer instrument.** It carries the redeemable code, so whoever holds the file can spend the gift card. Never log `Content`, and keep it no longer than you need it; `PdfDocument.ToString()` prints its size, never its bytes, and `Redaction` masks any `Content` field.
+
+The API token needs the Search permission, and the API serves only orders with at most three receivers, answering 422 (`HuurayValidationException`) for larger ones; the client leaves both to the API. A PDF can run to several megabytes and take longer than other calls, so Huuray suggests a 100-second `Timeout` for them, for example on a second client. Nothing in this client caps the response size.
+
 ## Seven things worth knowing
 
 These are the parts of the API that are easy to get wrong. The client handles each one, but the behaviour is worth understanding.
@@ -291,7 +307,7 @@ new HuurayClient(new HuurayClientOptions { ApiToken = t, ApiSecret = s, HashEnco
 
 ## API coverage
 
-All ten v4 operations, and nothing else. Every method maps to one operation in the [Swagger reference](https://api.huuray.com/swagger/index.html):
+All eleven v4 operations, and nothing else. Every method maps to one operation in the [Swagger reference](https://api.huuray.com/swagger/index.html):
 
 | Method | Endpoint |
 |---|---|
@@ -307,6 +323,8 @@ All ten v4 operations, and nothing else. Every method maps to one operation in t
 | `Orders.ResendAsync(…)` | `POST /v4/Resend` |
 | `Orders.CancelAsync(…)` | `DELETE /v4/Cancel` |
 | `Uploads.CreateAsync(…)` | `POST /v4/Upload` (`multipart/form-data`) |
+| `Pdfs.GetAsync(…)` | `POST /v4/Pdf` |
+| `Pdfs.GetWhenReadyAsync(…)` | `POST /v4/Pdf`, repeated while the answer is `202` |
 
 Need something not covered? `RequestAsync` signs any call for you:
 
@@ -327,7 +345,7 @@ Every exception derives from `HuurayException`.
 |---|---|
 | `HuurayConfigurationException` | missing or invalid client options |
 | `HuurayConnectionException` | the request never reached the API, or the response was unusable |
-| `HuurayTimeoutException` | the request exceeded `Timeout` |
+| `HuurayTimeoutException` | the request exceeded `Timeout`, or `Pdfs.GetWhenReadyAsync` ran out of `maxWait` |
 | `HuurayAuthException` | 401 or 403 — see *Authentication* above |
 | `HuurayNotFoundException` | 404 |
 | `HuurayValidationException` | 422 |
