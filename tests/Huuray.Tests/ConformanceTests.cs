@@ -362,18 +362,14 @@ public class PublicSurfaceInventory
     [Fact]
     public void EveryPublicMethodIsOnTheExercisedInventory()
     {
-        Type[] types =
-        {
-            typeof(HuurayClient),
-            typeof(BalancesResource),
-            typeof(CatalogueResource),
-            typeof(TemplatesResource),
-            typeof(StockResource),
-            typeof(ExchangeRatesResource),
-            typeof(OrdersResource),
-            typeof(UploadsResource),
-            typeof(PdfsResource),
-        };
+        // The types come from the client itself, not from a second hand-typed list: a
+        // resource dropped from Expected and from such a list together would pass unseen.
+        Type[] types = typeof(HuurayClient)
+            .GetProperties(BindingFlags.Public | BindingFlags.Instance)
+            .Select(property => property.PropertyType)
+            .Where(type => type.Name.EndsWith("Resource", StringComparison.Ordinal))
+            .Prepend(typeof(HuurayClient))
+            .ToArray();
 
         Dictionary<string, string[]> actual = new(StringComparer.Ordinal);
         foreach (Type type in types)
