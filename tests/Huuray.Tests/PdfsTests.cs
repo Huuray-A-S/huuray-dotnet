@@ -616,11 +616,15 @@ public class PdfGetWhenReadyTests
             PdfsTestData.NotReady("0"),
         });
 
-        await Assert.ThrowsAsync<HuurayTimeoutException>(() =>
+        HuurayTimeoutException error = await Assert.ThrowsAsync<HuurayTimeoutException>(() =>
             clock.For(harness).GetWhenReadyAsync(PdfsTestData.Request, TimeSpan.FromSeconds(2)));
 
         Assert.Equal(new[] { TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1) }, clock.Waits);
         Assert.Equal(3, harness.Calls.Count);
+        Assert.EndsWith(
+            "waiting another 1 second would pass maxWait. Last status: " + PdfsTestData.StillProcessing,
+            error.Message,
+            StringComparison.Ordinal);
     }
 
     [Fact]
@@ -659,8 +663,9 @@ public class PdfGetWhenReadyTests
         Assert.Equal("/v4/Pdf", timeout.Path);
         Assert.Null(timeout.InnerException);
         Assert.Equal(
-            "POST /v4/Pdf timed out after 60000ms. The gift card PDF was still not ready, and waiting another " +
-            "30 seconds would pass maxWait. Last status: " + PdfsTestData.StillProcessing,
+            "POST /v4/Pdf gave up waiting for the gift card PDF within maxWait (60000 ms). The gift card PDF " +
+            "was still not ready, and waiting another 30 seconds would pass maxWait. Last status: " +
+            PdfsTestData.StillProcessing,
             timeout.Message);
     }
 
@@ -690,11 +695,34 @@ public class PdfGetWhenReadyTests
         ManualClock clock = new();
         TestHarness harness = Fake.ClientWithQueue(new[] { PdfsTestData.NotReady("30") });
 
-        await Assert.ThrowsAsync<HuurayTimeoutException>(() =>
+        HuurayTimeoutException error = await Assert.ThrowsAsync<HuurayTimeoutException>(() =>
             clock.For(harness).GetWhenReadyAsync(PdfsTestData.Request, TimeSpan.FromSeconds(10)));
 
         Assert.Single(harness.Calls);
         Assert.Empty(clock.Waits);
+
+        // No time went by, so the message must not claim that maxWait did.
+        Assert.Equal(TimeSpan.FromSeconds(10), error.Timeout);
+        Assert.StartsWith(
+            "POST /v4/Pdf gave up waiting for the gift card PDF within maxWait (10000 ms).",
+            error.Message,
+            StringComparison.Ordinal);
+        Assert.DoesNotContain("timed out", error.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GivesUpAtOnce_OnTheLargestRetryAfterTheHeaderCanCarry()
+    {
+        // int.MaxValue seconds: no overflow, no wait, just the timeout exception.
+        ManualClock clock = new();
+        TestHarness harness = Fake.ClientWithQueue(new[] { PdfsTestData.NotReady("2147483647") });
+
+        HuurayTimeoutException error = await Assert.ThrowsAsync<HuurayTimeoutException>(() =>
+            clock.For(harness).GetWhenReadyAsync(PdfsTestData.Request));
+
+        Assert.Single(harness.Calls);
+        Assert.Empty(clock.Waits);
+        Assert.Contains("waiting another 2147483647 seconds would pass maxWait.", error.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -714,7 +742,10 @@ public class PdfGetWhenReadyTests
         Assert.Equal(TimeSpan.FromMinutes(10), PdfsResource.DefaultMaxWait);
         Assert.Equal(TimeSpan.FromMinutes(10), error.Timeout);
         Assert.Equal(new[] { TimeSpan.FromSeconds(300), TimeSpan.FromSeconds(300) }, clock.Waits);
-        Assert.StartsWith("POST /v4/Pdf timed out after 600000ms.", error.Message, StringComparison.Ordinal);
+        Assert.StartsWith(
+            "POST /v4/Pdf gave up waiting for the gift card PDF within maxWait (600000 ms).",
+            error.Message,
+            StringComparison.Ordinal);
     }
 
     [Fact]

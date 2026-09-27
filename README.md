@@ -345,7 +345,7 @@ Every exception derives from `HuurayException`.
 |---|---|
 | `HuurayConfigurationException` | missing or invalid client options |
 | `HuurayConnectionException` | the request never reached the API, or the response was unusable |
-| `HuurayTimeoutException` | the request exceeded `Timeout`, or `Pdfs.GetWhenReadyAsync` ran out of `maxWait` |
+| `HuurayTimeoutException` | the request exceeded `Timeout`, or `Pdfs.GetWhenReadyAsync` gave up within `maxWait` |
 | `HuurayAuthException` | 401 or 403 — see *Authentication* above |
 | `HuurayNotFoundException` | 404 |
 | `HuurayValidationException` | 422 |

@@ -36,7 +36,7 @@ public class HuurayConnectionException : HuurayException
 
 /// <summary>
 /// The request exceeded the client's configured timeout, or
-/// <see cref="PdfsResource.GetWhenReadyAsync"/> gave up waiting for a PDF at its <c>maxWait</c>.
+/// <see cref="PdfsResource.GetWhenReadyAsync"/> gave up waiting for a PDF within its <c>maxWait</c>.
 /// </summary>
 /// <remarks>
 /// Cancellation requested by your own <see cref="System.Threading.CancellationToken"/>
@@ -72,9 +72,20 @@ public sealed class HuurayTimeoutException : HuurayConnectionException
         Timeout = timeout;
     }
 
+    /// <summary>Creates a timeout exception with a message of its own.</summary>
+    /// <remarks>
+    /// For a wait that gave up before its limit passed, where "timed out after" would claim
+    /// more time than went by.
+    /// </remarks>
+    internal HuurayTimeoutException(string message, string method, string path, TimeSpan timeout)
+        : base(message, method, path, innerException: null)
+    {
+        Timeout = timeout;
+    }
+
     /// <summary>
     /// The timeout that elapsed before the request completed; for
-    /// <see cref="PdfsResource.GetWhenReadyAsync"/>, its <c>maxWait</c>.
+    /// <see cref="PdfsResource.GetWhenReadyAsync"/>, the <c>maxWait</c> it gave up within.
     /// </summary>
     public TimeSpan Timeout { get; }
 }

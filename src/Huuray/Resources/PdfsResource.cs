@@ -169,11 +169,10 @@ public sealed class PdfsResource
             if (wait > budget - _time.GetElapsedTime(started))
             {
                 throw new HuurayTimeoutException(
+                    GaveUpMessage(budget, wait, statusMessage),
                     HttpMethod.Post.Method,
                     PdfPath,
-                    budget,
-                    NotReadyNote(wait, statusMessage),
-                    innerException: null);
+                    budget);
             }
 
             await _delay(wait, cancellationToken).ConfigureAwait(false);
@@ -238,10 +237,19 @@ public sealed class PdfsResource
         return (result, response.Data?.StatusMessage);
     }
 
-    private static string NotReadyNote(TimeSpan wait, string? statusMessage) =>
+    /// <summary>
+    /// Says that the wait gave up within <paramref name="maxWait"/>, never that
+    /// <paramref name="maxWait"/> passed: it gives up before a wait would pass it, often much sooner.
+    /// </summary>
+    private static string GaveUpMessage(TimeSpan maxWait, TimeSpan wait, string? statusMessage) =>
         string.Format(
             CultureInfo.InvariantCulture,
-            "The gift card PDF was still not ready, and waiting another {0:0} seconds would pass maxWait.{1}",
+            "{0} {1} gave up waiting for the gift card PDF within maxWait ({2:0} ms). The gift card PDF " +
+            "was still not ready, and waiting another {3:0} {4} would pass maxWait.{5}",
+            HttpMethod.Post.Method,
+            PdfPath,
+            maxWait.TotalMilliseconds,
             wait.TotalSeconds,
+            wait == TimeSpan.FromSeconds(1) ? "second" : "seconds",
             statusMessage is null ? string.Empty : " Last status: " + statusMessage);
 }
