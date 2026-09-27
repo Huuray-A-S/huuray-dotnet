@@ -34,10 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Pdfs.GetWhenReadyAsync(GetPdfRequest, maxWait, CancellationToken)` asks again after each 202
   with a new signed request, waiting `RetryAfter` or 30 seconds, and never less than 1 second,
   and throws `HuurayTimeoutException` with the last `StatusMessage` before a wait would pass
-  `maxWait` (default `PdfsResource.DefaultMaxWait`, 10 minutes). Any other answer ends the wait.
-- `POST /v4/Pdf` is a read: retried on connection failures and 5xx with a fresh nonce. A 200
-  whose `Content` is not valid base64 throws `HuurayConnectionException`, without quoting it.
-  The order id, template id and receiver count are left to the API.
+  `maxWait` (default `PdfsResource.DefaultMaxWait`, 10 minutes). Any other 2xx is treated like
+  202; any non-2xx answer ends the wait.
+- `POST /v4/Pdf` is a read: retried on connection failures and on 408, 425, 429, 500, 502, 503
+  and 504, with a fresh nonce. A 200 whose `Content` is not valid base64 throws
+  `HuurayConnectionException`, without quoting it. The order id, template id and receiver count
+  are left to the API.
 - `PdfDocument.ToString()` prints `Content` as `[N bytes]`. The conformance gates exercise both
   methods with every `PdfRequest` field; the coverage gate expects eleven operations.
 

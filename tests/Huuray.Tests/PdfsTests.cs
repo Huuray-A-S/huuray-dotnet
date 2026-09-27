@@ -808,6 +808,23 @@ public class PdfGetWhenReadyTests
     }
 
     [Fact]
+    public async Task TreatsAny2xxOtherThan200LikeA202()
+    {
+        ManualClock clock = new();
+        TestHarness harness = Fake.ClientWithQueue(new[]
+        {
+            PdfsTestData.NotReady("5") with { Status = 206 },
+            PdfsTestData.ReadyOne,
+        });
+
+        PdfResult result = await clock.For(harness).GetWhenReadyAsync(PdfsTestData.Request);
+
+        Assert.True(result.Ready);
+        Assert.Equal(new[] { TimeSpan.FromSeconds(5) }, clock.Waits);
+        Assert.Equal(2, harness.Calls.Count);
+    }
+
+    [Fact]
     public async Task TreatsA429AsAnyOtherError_TheSpecDeclaresNone()
     {
         ManualClock clock = new();

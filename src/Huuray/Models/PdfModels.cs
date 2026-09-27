@@ -45,10 +45,13 @@ public sealed record GetPdfRequest
 /// The result of <c>POST /v4/Pdf</c>.
 /// </summary>
 /// <param name="Ready">
-/// <see langword="true"/> when the API answered <c>200</c> with the documents.
-/// <see langword="false"/> when it answered <c>202 Accepted</c>: the order is still being
-/// processed, or a supplier has not delivered a code yet, and <paramref name="Documents"/> is
-/// empty. Ask again after <paramref name="RetryAfter"/>, or use <c>Pdfs.GetWhenReadyAsync</c>.
+/// <see langword="true"/> when the API answered <c>200</c> with the documents. A <c>200</c>
+/// without documents is <see langword="true"/> with an empty <paramref name="Documents"/>, though
+/// Huuray's server never sends one: every case without vouchers is a <c>404</c>.
+/// <see langword="false"/> when it answered <c>202 Accepted</c> (or any 2xx other than 200): the
+/// order is still being processed, or a supplier has not delivered a code yet, and
+/// <paramref name="Documents"/> is empty. Ask again after <paramref name="RetryAfter"/>, or use
+/// <c>Pdfs.GetWhenReadyAsync</c>.
 /// </param>
 /// <param name="OrderUid">The order's unique identifier.</param>
 /// <param name="Documents">The PDFs: one per voucher, or a single one when <c>Combine</c> was set.</param>

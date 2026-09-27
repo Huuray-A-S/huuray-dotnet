@@ -75,9 +75,9 @@ public sealed class PdfsResource
     /// <c>POST /v4/Pdf</c>. A <c>202</c> is not an error and not success: ask again after
     /// <see cref="PdfResult.RetryAfter"/>, or let <see cref="GetWhenReadyAsync"/> do the asking.
     /// <para>
-    /// Retried on connection failures and 5xx, with a fresh nonce each time. A PDF can run to
-    /// several megabytes and take longer than other calls: Huuray suggests a
-    /// <see cref="HuurayClientOptions.Timeout"/> of 100 seconds for it.
+    /// Retried on connection failures and on 408, 425, 429, 500, 502, 503 and 504, with a fresh
+    /// nonce each time. A PDF can run to several megabytes and take longer than other calls:
+    /// Huuray suggests a <see cref="HuurayClientOptions.Timeout"/> of 100 seconds for it.
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="request"/> is <see langword="null"/>.</exception>
@@ -119,8 +119,8 @@ public sealed class PdfsResource
     /// Calls <see cref="GetAsync"/> and returns as soon as the API answers <c>200</c>. After a
     /// <c>202</c> it waits <see cref="PdfResult.RetryAfter"/>, or 30 seconds when the API sent none,
     /// but never less than 1 second, and asks again with a new signed request. It gives up before
-    /// a wait would pass <paramref name="maxWait"/>. Any other answer ends the wait at once, as an
-    /// exception.
+    /// a wait would pass <paramref name="maxWait"/>. Any other 2xx is treated like 202; any other
+    /// answer ends the wait at once, as an exception.
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="request"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxWait"/> is negative or above 4294967294 milliseconds.</exception>
