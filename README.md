@@ -159,7 +159,7 @@ All five fields are optional and independent, and `SendRewardRequest` takes them
 
 ## Fetching a gift card PDF
 
-`Pdfs.GetAsync` asks once for the gift card PDF of an order: one document per voucher, or one for them all with `Combine = true`. While the order is still being processed, or a supplier has not delivered a code yet, the API answers `202`, which arrives as `Ready == false` with no documents and a `RetryAfter`. `Pdfs.GetWhenReadyAsync` does the asking for you: it waits `RetryAfter` (30 seconds when none is sent) between signed requests, and throws `HuurayTimeoutException` with the API's last status before a wait would pass `maxWait` (10 minutes by default):
+`Pdfs.GetAsync` asks once for the gift card PDF of an order: one document per voucher, or one for them all with `Combine = true`. While the order is still being processed, or a supplier has not delivered a code yet, the API answers `202`, which arrives as `Ready == false` with no documents and a `RetryAfter`. `Pdfs.GetWhenReadyAsync` does the asking for you: it waits `RetryAfter` (30 seconds when none is sent, and never less than 1 second) between signed requests, and throws `HuurayTimeoutException` with the API's last status before a wait would pass `maxWait` (10 minutes by default):
 
 ```csharp
 PdfResult pdf = await huuray.Pdfs.GetWhenReadyAsync(

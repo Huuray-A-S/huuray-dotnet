@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -586,6 +587,56 @@ public class PdfGetWhenReadyTests
     }
 
     [Fact]
+    public async Task WaitsAtLeastOneSecond_WhenTheApiAsksForNoWait()
+    {
+        // Retry-After: 0 would otherwise set off back-to-back signed requests.
+        ManualClock clock = new();
+        TestHarness harness = Fake.ClientWithQueue(new[]
+        {
+            PdfsTestData.NotReady("0"),
+            PdfsTestData.NotReady("1"),
+            PdfsTestData.ReadyOne,
+        });
+
+        await clock.For(harness).GetWhenReadyAsync(PdfsTestData.Request);
+
+        Assert.Equal(new[] { TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1) }, clock.Waits);
+        Assert.Equal(3, harness.Calls.Count);
+    }
+
+    [Fact]
+    public async Task CountsTheOneSecondFloorTowardsMaxWait()
+    {
+        // Two floored waits use up the 2 s budget; a third would pass it.
+        ManualClock clock = new();
+        TestHarness harness = Fake.ClientWithQueue(new[]
+        {
+            PdfsTestData.NotReady("0"),
+            PdfsTestData.NotReady("0"),
+            PdfsTestData.NotReady("0"),
+        });
+
+        await Assert.ThrowsAsync<HuurayTimeoutException>(() =>
+            clock.For(harness).GetWhenReadyAsync(PdfsTestData.Request, TimeSpan.FromSeconds(2)));
+
+        Assert.Equal(new[] { TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1) }, clock.Waits);
+        Assert.Equal(3, harness.Calls.Count);
+    }
+
+    [Fact]
+    public async Task GivesUpAtOnce_WhenTheApiAsksForNoWaitButMaxWaitIsZero()
+    {
+        ManualClock clock = new();
+        TestHarness harness = Fake.ClientWithQueue(new[] { PdfsTestData.NotReady("0"), PdfsTestData.ReadyOne });
+
+        await Assert.ThrowsAsync<HuurayTimeoutException>(() =>
+            clock.For(harness).GetWhenReadyAsync(PdfsTestData.Request, TimeSpan.Zero));
+
+        Assert.Single(harness.Calls);
+        Assert.Empty(clock.Waits);
+    }
+
+    [Fact]
     public async Task GivesUpBeforeTheNextWaitWouldPassMaxWait_WithTheOrdinaryTimeoutException()
     {
         ManualClock clock = new();
@@ -762,13 +813,17 @@ public class PdfGetWhenReadyTests
     [Fact]
     public async Task WaitsForRealThroughTheClientsOwnResource()
     {
-        // A zero Retry-After, so the real wait takes no time.
+        // A zero Retry-After, so the real wait is the 1 s floor: the one test that sleeps.
         TestHarness harness = Fake.ClientWithQueue(new[] { PdfsTestData.NotReady("0"), PdfsTestData.ReadyOne });
+        Stopwatch stopwatch = Stopwatch.StartNew();
 
         PdfResult result = await harness.Client.Pdfs.GetWhenReadyAsync(PdfsTestData.Request);
 
         Assert.True(result.Ready);
         Assert.Equal(2, harness.Calls.Count);
+
+        // A little under 1 s, for the timer's granularity.
+        Assert.True(stopwatch.Elapsed >= TimeSpan.FromMilliseconds(900), $"Waited only {stopwatch.Elapsed}.");
     }
 }
 

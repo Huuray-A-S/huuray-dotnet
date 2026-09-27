@@ -32,6 +32,12 @@ public sealed class PdfsResource
     /// <summary>The wait after a <c>202</c> that carried no usable <c>Retry-After</c> header.</summary>
     internal static readonly TimeSpan DefaultRetryAfter = TimeSpan.FromSeconds(30);
 
+    /// <summary>
+    /// The shortest wait between two requests, so a <c>Retry-After: 0</c> never sets off
+    /// back-to-back signed requests.
+    /// </summary>
+    internal static readonly TimeSpan MinRetryAfter = TimeSpan.FromSeconds(1);
+
     private const string PdfPath = "/v4/Pdf";
 
     /// <summary>The longest wait <see cref="Task.Delay(TimeSpan)"/> accepts.</summary>
@@ -112,8 +118,9 @@ public sealed class PdfsResource
     /// <remarks>
     /// Calls <see cref="GetAsync"/> and returns as soon as the API answers <c>200</c>. After a
     /// <c>202</c> it waits <see cref="PdfResult.RetryAfter"/>, or 30 seconds when the API sent none,
-    /// and asks again with a new signed request. It gives up before a wait would pass
-    /// <paramref name="maxWait"/>. Any other answer ends the wait at once, as an exception.
+    /// but never less than 1 second, and asks again with a new signed request. It gives up before
+    /// a wait would pass <paramref name="maxWait"/>. Any other answer ends the wait at once, as an
+    /// exception.
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="request"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxWait"/> is negative or above 4294967294 milliseconds.</exception>
@@ -154,6 +161,11 @@ public sealed class PdfsResource
             }
 
             TimeSpan wait = result.RetryAfter ?? DefaultRetryAfter;
+            if (wait < MinRetryAfter)
+            {
+                wait = MinRetryAfter;
+            }
+
             if (wait > budget - _time.GetElapsedTime(started))
             {
                 throw new HuurayTimeoutException(
