@@ -388,7 +388,10 @@ public class RateLimitedReadTests
             delay: (wait, cancellationToken) =>
             {
                 cts.Cancel();
-                return Task.Delay(Timeout.Infinite, cancellationToken);
+
+                // Bounded, so a wait that is not handed the caller's token fails this test
+                // instead of hanging the suite.
+                return Task.Delay(Timeout.Infinite, cancellationToken).WaitAsync(TimeSpan.FromSeconds(10));
             });
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
