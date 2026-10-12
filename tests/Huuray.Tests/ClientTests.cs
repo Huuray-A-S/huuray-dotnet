@@ -626,6 +626,41 @@ public class RetryPolicyTests
     }
 
     [Fact]
+    public void KeepsEveryWaitWithinMaxDelay_WhateverIsConfigured()
+    {
+        // MaxDelay is at most what Task.Delay accepts, so neither a backoff nor a Retry-After
+        // wait can overflow or reach Task.Delay out of range.
+        TimeSpan longest = TimeSpan.FromMilliseconds(4_294_967_294);
+        TimeSpan[] baseDelays = { TimeSpan.FromTicks(1), TimeSpan.FromMilliseconds(250), longest, TimeSpan.MaxValue };
+        TimeSpan[] maxDelays = { TimeSpan.Zero, TimeSpan.FromTicks(1), TimeSpan.FromSeconds(4), longest };
+        int[] attempts = { 0, 1, 31, 62, 63, 64, 1023, 1024, int.MaxValue - 1 };
+        TimeSpan[] retryAfters =
+        {
+            TimeSpan.Zero, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(4), TimeSpan.FromSeconds(int.MaxValue), TimeSpan.MaxValue,
+        };
+
+        foreach (TimeSpan maxDelay in maxDelays)
+        {
+            foreach (TimeSpan baseDelay in baseDelays)
+            {
+                RetryPolicy policy = RetryPolicy.Resolve(new RetryOptions { BaseDelay = baseDelay, MaxDelay = maxDelay });
+
+                foreach (int attempt in attempts)
+                {
+                    Assert.InRange(policy.BackoffDelay(attempt), TimeSpan.Zero, maxDelay);
+                }
+
+                foreach (TimeSpan retryAfter in retryAfters)
+                {
+                    // Null is the wait that is refused: the 429 is thrown at once.
+                    TimeSpan wait = policy.RateLimitDelay(retryAfter) ?? TimeSpan.Zero;
+                    Assert.InRange(wait, TimeSpan.Zero, maxDelay);
+                }
+            }
+        }
+    }
+
+    [Fact]
     public async Task ANegativeMaxRetriesStillSendsExactlyOnce()
     {
         TestHarness harness = Fake.Client(

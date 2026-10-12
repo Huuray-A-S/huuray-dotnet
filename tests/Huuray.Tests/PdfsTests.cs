@@ -98,6 +98,9 @@ internal sealed class ManualClock : TimeProvider
 
     public override long GetTimestamp() => _ticks;
 
+    /// <summary>Moves the clock without a wait of the resource's own, as a wait between a request's retries does.</summary>
+    internal void Advance(TimeSpan time) => _ticks += time.Ticks;
+
     internal Task DelayAsync(TimeSpan wait, CancellationToken cancellationToken)
     {
         Waits.Add(wait);
@@ -901,6 +904,31 @@ public class PdfGetWhenReadyTests
         Assert.Equal(new[] { TimeSpan.FromSeconds(1) }, retryWaits.Waits);
         Assert.Equal(new[] { TimeSpan.FromSeconds(5) }, clock.Waits);
         Assert.Equal(3, harness.Calls.Count);
+    }
+
+    [Fact]
+    public async Task ChecksMaxWaitBeforeAWaitAfterA202Only_NotBeforeAWaitBetweenARequestsRetries()
+    {
+        // One clock for both waits, as outside the tests. The 3 s Retry-After is waited in full
+        // under a maxWait of 2 s. Its time counts, so the 1 s the 202 then asks for would pass it.
+        ManualClock clock = new();
+        List<TimeSpan> retryWaits = new();
+        TestHarness harness = Fake.ClientWithQueue(
+            new[] { RateLimitTestData.TooMany("3"), PdfsTestData.NotReady("1"), PdfsTestData.ReadyOne },
+            retry: RateLimitTestData.TwoRetries,
+            delay: (wait, _) =>
+            {
+                retryWaits.Add(wait);
+                clock.Advance(wait);
+                return Task.CompletedTask;
+            });
+
+        await Assert.ThrowsAsync<HuurayTimeoutException>(() =>
+            clock.For(harness).GetWhenReadyAsync(PdfsTestData.Request, TimeSpan.FromSeconds(2)));
+
+        Assert.Equal(new[] { TimeSpan.FromSeconds(3) }, retryWaits);
+        Assert.Empty(clock.Waits);
+        Assert.Equal(2, harness.Calls.Count);
     }
 
     [Fact]

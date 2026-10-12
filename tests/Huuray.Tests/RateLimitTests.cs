@@ -231,6 +231,29 @@ public class RateLimitedReadTests
         TimeSpan wait = Assert.Single(waits.Waits);
         Assert.InRange(wait, TimeSpan.Zero, TimeSpan.FromMilliseconds(10));
         Assert.Equal(2, harness.Calls.Count);
+        Assert.NotEqual(harness.Calls[0].Headers["X-API-NONCE"], harness.Calls[1].Headers["X-API-NONCE"]);
+        Assert.NotEqual(harness.Calls[0].Headers["X-API-HASH"], harness.Calls[1].Headers["X-API-HASH"]);
+    }
+
+    [Fact]
+    public async Task WaitsRetryAfterAlone_NotTheLongerOfTheTwoWaitsNorTheirSum()
+    {
+        // A backoff of up to a day, so taking the longer wait, or adding the two, would show.
+        RecordedWaits waits = new();
+        TestHarness harness = Fake.ClientWithQueue(
+            new[] { RateLimitTestData.TooMany("2"), RateLimitTestData.Balances },
+            retry: new RetryOptions
+            {
+                MaxRetries = 1,
+                BaseDelay = TimeSpan.FromDays(1),
+                MaxDelay = TimeSpan.FromDays(1),
+            },
+            delay: waits.DelayAsync);
+
+        await harness.Client.Balances.ListAsync();
+
+        Assert.Equal(new[] { TimeSpan.FromSeconds(2) }, waits.Waits);
+        Assert.Equal(2, harness.Calls.Count);
     }
 
     [Fact]
@@ -249,18 +272,26 @@ public class RateLimitedReadTests
         Assert.InRange(waits.Waits[1], TimeSpan.Zero, TimeSpan.FromMilliseconds(2));
     }
 
-    [Fact]
-    public async Task ReadsRetryAfterOnA429Only_TheSpecDocumentsItNowhereElseOnAnError()
+    [Theory]
+    // Every other status a read is retried for: the wait is the backoff, of a millisecond at most.
+    [InlineData(408)]
+    [InlineData(425)]
+    [InlineData(500)]
+    [InlineData(502)]
+    [InlineData(503)]
+    [InlineData(504)]
+    public async Task ReadsRetryAfterOnA429Only_TheSpecDocumentsItNowhereElseOnAnError(int status)
     {
         RecordedWaits waits = new();
         TestHarness harness = Fake.ClientWithQueue(
-            new[] { new MockResponse { Status = 503, RetryAfter = "3" }, RateLimitTestData.Balances },
+            new[] { new MockResponse { Status = status, RetryAfter = "3" }, RateLimitTestData.Balances },
             retry: RateLimitTestData.TwoRetries,
             delay: waits.DelayAsync);
 
         await harness.Client.Balances.ListAsync();
 
         Assert.InRange(Assert.Single(waits.Waits), TimeSpan.Zero, TimeSpan.FromMilliseconds(1));
+        Assert.Equal(2, harness.Calls.Count);
     }
 
     [Fact]

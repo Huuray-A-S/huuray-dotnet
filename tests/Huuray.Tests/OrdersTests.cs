@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using System.Net.Http;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
@@ -321,6 +323,16 @@ public class SendRewardTests
         await harness.Client.SendRewardAsync(Reward);
 
         Assert.Single(harness.Calls);
+    }
+
+    [Fact]
+    public void KeepsTemplateIdRequired_AnOrderWithOnlyAPdfTemplateIsForCreateAsync()
+    {
+        // The compiler refuses a SendRewardRequest without TemplateId, so this reads the declaration.
+        PropertyInfo templateId = typeof(SendRewardRequest).GetProperty(nameof(SendRewardRequest.TemplateId))!;
+
+        Assert.Equal(typeof(int), templateId.PropertyType);
+        Assert.True(templateId.IsDefined(typeof(RequiredMemberAttribute), inherit: false));
     }
 }
 
