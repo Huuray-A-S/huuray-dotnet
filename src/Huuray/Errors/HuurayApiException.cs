@@ -253,9 +253,9 @@ public sealed class HuurayValidationException : HuurayApiException
 /// </para>
 /// <para>
 /// Reads wait and try again by themselves first, so they throw this when those retries are used
-/// up, or at once when the wait asked for is longer than <see cref="RetryOptions.MaxDelay"/>.
-/// An order, a resend, a cancel and an upload are never retried automatically, and throw it on
-/// the first 429.
+/// up, or at once when the wait (its <c>Retry-After</c>, at least 1 second) is longer than
+/// <see cref="RetryOptions.MaxDelay"/>. An order, a resend, a cancel and an upload are never
+/// retried automatically, and throw it on the first 429.
 /// </para>
 /// </remarks>
 public sealed class HuurayRateLimitException : HuurayApiException
@@ -289,7 +289,10 @@ public sealed class HuurayRateLimitException : HuurayApiException
     /// </summary>
     /// <remarks>
     /// <see langword="null"/> when the header was absent or not whole seconds: an HTTP-date, a
-    /// negative value and a fraction all read as <see langword="null"/>.
+    /// negative value and a fraction all read as <see langword="null"/>. The value is carried as
+    /// the API sent it, so it can be as much as 2147483647 seconds, which is above the 4294967294
+    /// milliseconds <see cref="System.Threading.Tasks.Task.Delay(TimeSpan)"/> accepts: clamp it
+    /// before passing it to <c>Task.Delay</c>.
     /// </remarks>
     public TimeSpan? RetryAfter { get; }
 }

@@ -233,7 +233,7 @@ This is why `SendRewardAsync` requires a `RefId` even though the API treats it a
 
 Reads *are* retried — with backoff, on connection failures and 5xx.
 
-A `429` means the rate limit for your IP address was exceeded and the request was not processed. A read waits the seconds its `Retry-After` header gives (at least 1) and asks again; when that is longer than `Retry.MaxDelay` (4 seconds by default), or the retries are used up, it throws `HuurayRateLimitException`, which carries `RetryAfter`. An order, a resend, a cancel or an upload is not retried for a 429 either, and throws `HuurayRateLimitException` on the first one, never `HuurayIndeterminateOrderException`: nothing was processed, so the same request can be sent again after waiting.
+A `429` means the rate limit for your IP address was exceeded and the request was not processed. A read waits the seconds its `Retry-After` header gives (at least 1) and asks again; when that wait is longer than `Retry.MaxDelay` (4 seconds by default), or the retries are used up, it throws `HuurayRateLimitException`, which carries `RetryAfter`. An order, a resend, a cancel or an upload is not retried for a 429 either, and throws `HuurayRateLimitException` on the first one, never `HuurayIndeterminateOrderException`: nothing was processed, so the same request can be sent again after waiting.
 
 ### 3. Synchronous and asynchronous orders are different calls
 

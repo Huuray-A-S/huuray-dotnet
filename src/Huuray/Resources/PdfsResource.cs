@@ -88,8 +88,8 @@ public sealed class PdfsResource
     /// <exception cref="HuurayNotFoundException">The order or voucher was not found, or is cancelled.</exception>
     /// <exception cref="HuurayValidationException">The API rejected the request, for example an order with more than 10 receivers.</exception>
     /// <exception cref="HuurayRateLimitException">
-    /// The API answered 429 and the retries were used up, or its <c>Retry-After</c> is longer than
-    /// <see cref="RetryOptions.MaxDelay"/>.
+    /// The API answered 429 and the retries were used up, or the wait its <c>Retry-After</c> asks
+    /// for (at least 1 second) is longer than <see cref="RetryOptions.MaxDelay"/>.
     /// </exception>
     /// <exception cref="HuurayApiException">The API returned another non-2xx response.</exception>
     /// <exception cref="HuurayConnectionException">
@@ -116,7 +116,9 @@ public sealed class PdfsResource
     /// <param name="request">The order, and optionally one voucher, a PDF template and whether to combine.</param>
     /// <param name="maxWait">
     /// How long to keep asking, from 0 to 4294967294 milliseconds. Defaults to
-    /// <see cref="DefaultMaxWait"/>, 10 minutes.
+    /// <see cref="DefaultMaxWait"/>, 10 minutes. Only a wait after a 202 is checked against it: a
+    /// wait between the retries of a single request (backoff or <c>Retry-After</c>) is never
+    /// refused or shortened for it, though the time it takes counts as time passed.
     /// </param>
     /// <param name="cancellationToken">Cancels the call, including a wait between two requests.</param>
     /// <returns>The documents; <see cref="PdfResult.Ready"/> is always <see langword="true"/>.</returns>

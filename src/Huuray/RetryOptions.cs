@@ -47,7 +47,8 @@ public sealed record RetryOptions
     /// At most 4294967294 milliseconds; a negative value counts as zero. A 429 is waited for as
     /// long as its <c>Retry-After</c> says (at least 1 second) in place of the backoff; when that
     /// is longer than this ceiling, nothing is waited and <see cref="HuurayRateLimitException"/>
-    /// is thrown at once.
+    /// is thrown at once. So with a ceiling below 1 second, a 429 that carries
+    /// <c>Retry-After</c> is never retried.
     /// </remarks>
     public TimeSpan? MaxDelay { get; init; }
 
