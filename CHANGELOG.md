@@ -134,8 +134,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Templates.ListAsync()` docs and the Quickstart cover both outcomes observed live: a 404
   for an account with no templates, and an empty `Templates` list for one with only PDF
   templates.
-- The spec-drift workflow is described as it behaves: with pull requests disabled, a
-  detected change pushes the `spec-drift` branch and fails the run.
+- The spec-drift workflow is described as it behaves: a detected change opens an issue
+  with the diff.
 
 ### Confirmed against the live API
 
@@ -217,8 +217,8 @@ First release. Complete coverage of the Huuray API v4.
   against its schema). The validator fails closed on schema shapes it does not understand.
 - A mechanical inventory pins the public method list, so a new method cannot bypass the
   gates by not being exercised.
-- A weekly spec-drift job re-downloads the live specification and fails on any change:
-  pull requests are disabled on this repository.
+- A weekly spec-drift job re-downloads the live specification and opens an issue on any
+  change.
 - No test makes a live API call.
 
 [Unreleased]: https://github.com/Huuray-A-S/huuray-dotnet/compare/v0.1.0...HEAD
