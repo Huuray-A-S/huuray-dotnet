@@ -73,7 +73,7 @@ public sealed record UploadResult(string? Token, string? FileName, string? Conte
         builder.Append(", ContentType = ");
         builder.Append(ContentType);
         builder.Append(", Size = ");
-        builder.Append(Size.ToString());
+        builder.Append(Size);
         return true;
     }
 }

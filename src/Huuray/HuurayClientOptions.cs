@@ -79,9 +79,9 @@ public sealed record HuurayClientOptions
         builder.Append("ApiToken = [redacted], ApiSecret = [redacted], BaseUrl = ");
         builder.Append(BaseUrl);
         builder.Append(", HashEncoding = ");
-        builder.Append(HashEncoding.ToString());
+        builder.Append(HashEncoding);
         builder.Append(", Timeout = ");
-        builder.Append(Timeout.ToString());
+        builder.Append(Timeout);
         builder.Append(", Retry = ");
         builder.Append(Retry);
         builder.Append(", UserAgent = ");
