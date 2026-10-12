@@ -194,10 +194,10 @@ public class NoInventionGate : IClassFixture<ExercisedSurface>
         foreach (CapturedRequest call in _surface.Calls)
         {
             Assert.True(call.Headers.ContainsKey("X-API-TOKEN"), $"{call.Method} {call.Path} sent no token");
-            Assert.True(call.Headers.ContainsKey("X-API-NONCE"), $"{call.Method} {call.Path} sent no nonce");
+            Assert.True(call.Headers.TryGetValue("X-API-NONCE", out string? nonce), $"{call.Method} {call.Path} sent no nonce");
             Assert.True(call.Headers.ContainsKey("X-API-HASH"), $"{call.Method} {call.Path} sent no hash");
             Assert.True(
-                call.Headers["X-API-NONCE"].Length <= RequestSigner.NonceMaxLength,
+                nonce.Length <= RequestSigner.NonceMaxLength,
                 $"{call.Method} {call.Path} sent a nonce over the documented limit");
         }
     }

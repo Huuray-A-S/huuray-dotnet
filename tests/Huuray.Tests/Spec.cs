@@ -510,7 +510,7 @@ internal static class Spec
 
     private static JsonObject Load()
     {
-        string path = Path.Combine(AppContext.BaseDirectory, "openapi", "huuray-v4.json");
+        string path = Path.Join(AppContext.BaseDirectory, "openapi", "huuray-v4.json");
         if (!File.Exists(path))
         {
             throw new FileNotFoundException(
