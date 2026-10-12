@@ -78,6 +78,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `Recipients` is still required only when `TemplateId` is set. `SendRewardRequest.TemplateId`
   stays required: for a physical product ordered with only a PDF template, use
   `Orders.CreateAsync`.
+- **A read's 429 is now `HuurayRateLimitException`.** It waits its `Retry-After` (at least
+  1 second) in place of the backoff, and is thrown at once when that wait is longer than
+  `RetryOptions.MaxDelay`. It was a plain `HuurayApiException`, retried after the backoff.
 - **`openapi/huuray-v4.json` is the specification published 9 October 2026.** It adds a 429
   response with a `Retry-After` header to every operation, documents
   `DeliveryPDFTemplateUid` without `DeliveryTemplateId` for a physical product, and puts the
