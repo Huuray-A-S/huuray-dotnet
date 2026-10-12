@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -142,14 +143,9 @@ internal static class Multipart
             return false;
         }
 
-        string? boundary = null;
-        foreach (NameValueHeaderValue parameter in media.Parameters)
-        {
-            if (string.Equals(parameter.Name, "boundary", StringComparison.OrdinalIgnoreCase))
-            {
-                boundary = parameter.Value?.Trim('"');
-            }
-        }
+        string? boundary = media.Parameters
+            .LastOrDefault(parameter => string.Equals(parameter.Name, "boundary", StringComparison.OrdinalIgnoreCase))
+            ?.Value?.Trim('"');
 
         if (string.IsNullOrEmpty(boundary))
         {

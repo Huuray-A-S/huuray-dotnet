@@ -179,12 +179,9 @@ public class NoInventionGate : IClassFixture<ExercisedSurface>
             }
 
             HashSet<string> declared = Spec.DeclaredQueryParameters(call.Method, call.Path);
-            foreach (KeyValuePair<string, string> parameter in call.Query)
+            foreach (KeyValuePair<string, string> parameter in call.Query.Where(parameter => !declared.Contains(parameter.Key)))
             {
-                if (!declared.Contains(parameter.Key))
-                {
-                    failures.Add($"{call.Method} {call.Path} sent undeclared query parameter \"{parameter.Key}\"");
-                }
+                failures.Add($"{call.Method} {call.Path} sent undeclared query parameter \"{parameter.Key}\"");
             }
         }
 

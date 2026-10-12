@@ -94,12 +94,9 @@ internal static class Spec
             return errors;
         }
 
-        foreach (KeyValuePair<string, JsonNode?> member in requestBody)
+        foreach (KeyValuePair<string, JsonNode?> member in requestBody.Where(member => member.Key is not ("content" or "required" or "description")))
         {
-            if (member.Key is not ("content" or "required" or "description"))
-            {
-                errors.Add($"{at}: requestBody has \"{member.Key}\", which this validator does not handle — extend Spec before trusting this run");
-            }
+            errors.Add($"{at}: requestBody has \"{member.Key}\", which this validator does not handle — extend Spec before trusting this run");
         }
 
         JsonObject? content = requestBody["content"]?.AsObject();
@@ -109,12 +106,9 @@ internal static class Spec
             return errors;
         }
 
-        foreach (KeyValuePair<string, JsonNode?> declared in content)
+        foreach (KeyValuePair<string, JsonNode?> declared in content.Where(declared => declared.Key is not ("application/json" or "multipart/form-data")))
         {
-            if (declared.Key is not ("application/json" or "multipart/form-data"))
-            {
-                errors.Add($"{at}: requestBody declares {declared.Key}, which this validator does not handle — extend Spec before trusting this run");
-            }
+            errors.Add($"{at}: requestBody declares {declared.Key}, which this validator does not handle — extend Spec before trusting this run");
         }
 
         if (errors.Count > 0)
@@ -142,12 +136,9 @@ internal static class Spec
             return errors;
         }
 
-        foreach (KeyValuePair<string, JsonNode?> member in media)
+        foreach (KeyValuePair<string, JsonNode?> member in media.Where(member => member.Key != "schema"))
         {
-            if (member.Key != "schema")
-            {
-                errors.Add($"{at}: application/json has \"{member.Key}\", which this validator does not handle — extend Spec before trusting this run");
-            }
+            errors.Add($"{at}: application/json has \"{member.Key}\", which this validator does not handle — extend Spec before trusting this run");
         }
 
         if (media["schema"] is not JsonNode schema)
@@ -189,12 +180,9 @@ internal static class Spec
         List<string> errors = new();
         string extend = " — extend Spec.ValidateMultipart before trusting this run";
 
-        foreach (KeyValuePair<string, JsonNode?> member in media)
+        foreach (KeyValuePair<string, JsonNode?> member in media.Where(member => member.Key is not ("schema" or "encoding")))
         {
-            if (member.Key is not ("schema" or "encoding"))
-            {
-                errors.Add($"{at}: multipart/form-data has \"{member.Key}\", which this validator does not handle{extend}");
-            }
+            errors.Add($"{at}: multipart/form-data has \"{member.Key}\", which this validator does not handle{extend}");
         }
 
         if (media["schema"] is not JsonNode schemaNode)
@@ -204,12 +192,10 @@ internal static class Spec
         }
 
         JsonObject schema = Deref(schemaNode);
-        foreach (KeyValuePair<string, JsonNode?> member in schema)
+        foreach (KeyValuePair<string, JsonNode?> member in schema.Where(
+                     member => member.Key is not ("type" or "properties" or "required" or "title" or "description")))
         {
-            if (member.Key is not ("type" or "properties" or "required" or "title" or "description"))
-            {
-                errors.Add($"{at}: the multipart schema has \"{member.Key}\", which this validator does not handle{extend}");
-            }
+            errors.Add($"{at}: the multipart schema has \"{member.Key}\", which this validator does not handle{extend}");
         }
 
         if (Text(schema["type"]) != "object")
@@ -221,12 +207,9 @@ internal static class Spec
         foreach (KeyValuePair<string, JsonNode?> property in properties)
         {
             JsonObject part = Deref(property.Value!);
-            foreach (KeyValuePair<string, JsonNode?> member in part)
+            foreach (KeyValuePair<string, JsonNode?> member in part.Where(member => member.Key is not ("type" or "format" or "description")))
             {
-                if (member.Key is not ("type" or "format" or "description"))
-                {
-                    errors.Add($"{at}.{property.Key}: the part schema has \"{member.Key}\", which this validator does not handle{extend}");
-                }
+                errors.Add($"{at}.{property.Key}: the part schema has \"{member.Key}\", which this validator does not handle{extend}");
             }
 
             if (Text(part["type"]) != "string" || Text(part["format"]) != "binary")
@@ -306,21 +289,15 @@ internal static class Spec
             }
         }
 
-        foreach (KeyValuePair<string, int> name in seen)
+        foreach (KeyValuePair<string, int> name in seen.Where(name => name.Value > 1))
         {
-            if (name.Value > 1)
-            {
-                errors.Add(string.Format(CultureInfo.InvariantCulture, "{0}.{1}: sent {2} times; the spec declares one part", at, name.Key, name.Value));
-            }
+            errors.Add(string.Format(CultureInfo.InvariantCulture, "{0}.{1}: sent {2} times; the spec declares one part", at, name.Key, name.Value));
         }
 
-        foreach (JsonNode? name in schema["required"]?.AsArray() ?? new JsonArray())
+        JsonArray required = schema["required"]?.AsArray() ?? new JsonArray();
+        foreach (string key in required.Select(name => name!.GetValue<string>()).Where(key => !seen.ContainsKey(key)))
         {
-            string key = name!.GetValue<string>();
-            if (!seen.ContainsKey(key))
-            {
-                errors.Add($"{at}.{key}: required by the spec but not sent");
-            }
+            errors.Add($"{at}.{key}: required by the spec but not sent");
         }
 
         return errors;
@@ -409,26 +386,19 @@ internal static class Spec
                 }
 
                 // The invention detector: a property the specification does not define.
-                foreach (KeyValuePair<string, JsonNode?> member in obj)
+                foreach (KeyValuePair<string, JsonNode?> member in obj.Where(member => !known.Contains(member.Key)))
                 {
-                    if (!known.Contains(member.Key))
-                    {
-                        errors.Add(
-                            $"{at}.{member.Key}: not defined in the spec — " +
-                            "the SDK must not send undocumented fields");
-                    }
+                    errors.Add(
+                        $"{at}.{member.Key}: not defined in the spec — " +
+                        "the SDK must not send undocumented fields");
                 }
 
                 JsonArray? required = schema["required"]?.AsArray();
                 if (required is not null)
                 {
-                    foreach (JsonNode? name in required)
+                    foreach (string key in required.Select(name => name!.GetValue<string>()).Where(key => !obj.ContainsKey(key)))
                     {
-                        string key = name!.GetValue<string>();
-                        if (!obj.ContainsKey(key))
-                        {
-                            errors.Add($"{at}.{key}: required by the spec but not sent");
-                        }
+                        errors.Add($"{at}.{key}: required by the spec but not sent");
                     }
                 }
 
