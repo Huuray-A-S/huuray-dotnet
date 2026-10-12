@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Net.Http;
-using System.Net.Http.Headers;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
@@ -65,6 +64,7 @@ public sealed class HuurayClient
     private readonly RetryPolicy _retry;
     private readonly string _userAgent;
     private readonly Func<string> _nonceFactory;
+    private readonly Func<TimeSpan, CancellationToken, Task> _delay;
 
     /// <summary>
     /// Creates a client.
@@ -84,6 +84,17 @@ public sealed class HuurayClient
     /// 1 to 4294967294 milliseconds, or <c>Retry.MaxDelay</c> is above 4294967294 milliseconds.
     /// </exception>
     public HuurayClient(HuurayClientOptions options, HttpClient? httpClient = null)
+        : this(options, httpClient, Task.Delay)
+    {
+    }
+
+    /// <summary>
+    /// Creates a client with its own wait between attempts, which tests replace so that no test sleeps.
+    /// </summary>
+    internal HuurayClient(
+        HuurayClientOptions options,
+        HttpClient? httpClient,
+        Func<TimeSpan, CancellationToken, Task> delay)
     {
         if (options is null)
         {
@@ -202,6 +213,7 @@ public sealed class HuurayClient
             ? SdkUserAgent
             : SdkUserAgent + " " + options.UserAgent;
         _httpClient = httpClient ?? SharedHttpClient.Value;
+        _delay = delay;
 
         Balances = new BalancesResource(this);
         Catalogue = new CatalogueResource(this);
@@ -409,11 +421,15 @@ public sealed class HuurayClient
         int attempts = retryable ? _retry.MaxRetries : 0;
         Exception? lastError = null;
 
+        // The wait a 429 asked for with Retry-After, taken once in place of the backoff.
+        TimeSpan? rateLimitWait = null;
+
         for (int attempt = 0; attempt <= attempts; attempt++)
         {
             if (attempt > 0)
             {
-                await Task.Delay(_retry.BackoffDelay(attempt - 1), cancellationToken).ConfigureAwait(false);
+                await _delay(rateLimitWait ?? _retry.BackoffDelay(attempt - 1), cancellationToken).ConfigureAwait(false);
+                rateLimitWait = null;
             }
 
             using CancellationTokenSource timeoutSource =
@@ -440,7 +456,7 @@ public sealed class HuurayClient
 
             int httpStatus;
             string text;
-            RetryConditionHeaderValue? retryAfter;
+            TimeSpan? retryAfter;
             HttpResponseMessage? response = null;
             try
             {
@@ -455,8 +471,11 @@ public sealed class HuurayClient
 
                 httpStatus = (int)response.StatusCode;
 
-                // Read before the response is disposed. An unparseable value reads as null.
-                retryAfter = response.Headers.RetryAfter;
+                // Read before the response is disposed: Retry-After in whole seconds only, for
+                // the 202 of /v4/Pdf and for a 429. An HTTP-date reads as null like any other
+                // value that is not whole seconds; a negative value or a fraction never parses
+                // at all.
+                retryAfter = response.Headers.RetryAfter?.Delta;
                 text = await response.Content.ReadAsStringAsync(timeoutSource.Token).ConfigureAwait(false);
             }
             catch (Exception exception)
@@ -529,10 +548,21 @@ public sealed class HuurayClient
                 return new HuurayResponse<T>(data, httpStatus, retryAfter);
             }
 
-            HuurayApiException apiError = HuurayApiException.Create(httpStatus, TryParseJson(text), verb, path);
+            HuurayApiException apiError = HuurayApiException.Create(httpStatus, TryParseJson(text), verb, path, retryAfter);
             lastError = apiError;
             if (attempt < attempts && RetryPolicy.IsRetryableStatus(httpStatus))
             {
+                // A 429 says how long to wait. A wait above Retry.MaxDelay is not slept
+                // through: the caller gets the exception at once, and decides.
+                if (apiError is HuurayRateLimitException { RetryAfter: TimeSpan asked })
+                {
+                    rateLimitWait = _retry.RateLimitDelay(asked);
+                    if (rateLimitWait is null)
+                    {
+                        throw apiError;
+                    }
+                }
+
                 continue;
             }
 

@@ -377,6 +377,7 @@ public class PdfErrorTests
     [InlineData(401, "Restricted Access", typeof(HuurayAuthException))]
     [InlineData(404, "No order was found with the given OrderUID", typeof(HuurayNotFoundException))]
     [InlineData(422, "The PDF can only be fetched for orders with at most 3 receivers", typeof(HuurayValidationException))]
+    [InlineData(429, "Too Many Requests", typeof(HuurayRateLimitException))]
     [InlineData(500, "The PDF could not be generated", typeof(HuurayServerException))]
     public async Task MapsTheEnvelopeOntoTheExistingExceptionTypes(int status, string statusMessage, Type expected)
     {
@@ -825,17 +826,81 @@ public class PdfGetWhenReadyTests
     }
 
     [Fact]
-    public async Task TreatsA429AsAnyOtherError_TheSpecDeclaresNone()
+    public async Task A429ThatOutlivesTheReadRetries_EndsTheWaitWithTheRateLimitException()
+    {
+        // The read retries wait for a 429; the wait for the PDF does no looping of its own.
+        ManualClock clock = new();
+        RecordedWaits retryWaits = new();
+        TestHarness harness = Fake.ClientWithQueue(
+            new[]
+            {
+                PdfsTestData.NotReady("5"),
+                RateLimitTestData.TooMany("1"),
+                RateLimitTestData.TooMany("2"),
+                RateLimitTestData.TooMany("3"),
+            },
+            retry: RateLimitTestData.TwoRetries,
+            delay: retryWaits.DelayAsync);
+
+        HuurayRateLimitException error = await Assert.ThrowsAsync<HuurayRateLimitException>(() =>
+            clock.For(harness).GetWhenReadyAsync(PdfsTestData.Request));
+
+        Assert.Equal(TimeSpan.FromSeconds(3), error.RetryAfter);
+        Assert.Equal("/v4/Pdf", error.Path);
+        Assert.Equal(new[] { TimeSpan.FromSeconds(5) }, clock.Waits);
+        Assert.Equal(new[] { TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(2) }, retryWaits.Waits);
+        Assert.Equal(4, harness.Calls.Count);
+    }
+
+    [Fact]
+    public async Task A429WithRetriesOff_EndsTheWaitAtOnce()
     {
         ManualClock clock = new();
-        TestHarness harness = Fake.ClientWithQueue(new[] { new MockResponse { Status = 429, RetryAfter = "1" } });
+        TestHarness harness = Fake.ClientWithQueue(new[] { RateLimitTestData.TooMany("1") });
 
-        HuurayApiException error = await Assert.ThrowsAsync<HuurayApiException>(() =>
+        HuurayRateLimitException error = await Assert.ThrowsAsync<HuurayRateLimitException>(() =>
             clock.For(harness).GetWhenReadyAsync(PdfsTestData.Request));
 
         Assert.Equal(429, error.HttpStatus);
+        Assert.Equal(TimeSpan.FromSeconds(1), error.RetryAfter);
         Assert.Empty(clock.Waits);
         Assert.Single(harness.Calls);
+    }
+
+    [Fact]
+    public async Task A429WhoseRetryAfterIsLongerThanMaxDelay_EndsTheWaitAtOnce_HoweverLongMaxWaitIs()
+    {
+        ManualClock clock = new();
+        RecordedWaits retryWaits = new();
+        TestHarness harness = Fake.ClientWithQueue(
+            new[] { RateLimitTestData.TooMany("30") },
+            retry: RateLimitTestData.TwoRetries,
+            delay: retryWaits.DelayAsync);
+
+        await Assert.ThrowsAsync<HuurayRateLimitException>(() =>
+            clock.For(harness).GetWhenReadyAsync(PdfsTestData.Request, TimeSpan.FromMinutes(10)));
+
+        Assert.Empty(clock.Waits);
+        Assert.Empty(retryWaits.Waits);
+        Assert.Single(harness.Calls);
+    }
+
+    [Fact]
+    public async Task A429TheReadRetriesGetPast_DoesNotEndTheWait()
+    {
+        ManualClock clock = new();
+        RecordedWaits retryWaits = new();
+        TestHarness harness = Fake.ClientWithQueue(
+            new[] { RateLimitTestData.TooMany("1"), PdfsTestData.NotReady("5"), PdfsTestData.ReadyOne },
+            retry: RateLimitTestData.TwoRetries,
+            delay: retryWaits.DelayAsync);
+
+        PdfResult result = await clock.For(harness).GetWhenReadyAsync(PdfsTestData.Request);
+
+        Assert.True(result.Ready);
+        Assert.Equal(new[] { TimeSpan.FromSeconds(1) }, retryWaits.Waits);
+        Assert.Equal(new[] { TimeSpan.FromSeconds(5) }, clock.Waits);
+        Assert.Equal(3, harness.Calls.Count);
     }
 
     [Fact]

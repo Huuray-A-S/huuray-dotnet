@@ -79,10 +79,24 @@ public class HuurayApiException : HuurayException
     /// <returns>
     /// <see cref="HuurayAuthException"/> for 401 and 403, <see cref="HuurayNotFoundException"/>
     /// for 404, <see cref="HuurayValidationException"/> for 422,
+    /// <see cref="HuurayRateLimitException"/> for 429 (with no
+    /// <see cref="HuurayRateLimitException.RetryAfter"/>: the header is not part of the body),
     /// <see cref="HuurayServerException"/> for 5xx, and <see cref="HuurayApiException"/>
     /// for anything else.
     /// </returns>
-    public static HuurayApiException Create(int httpStatus, JsonNode? body, string method, string path)
+    public static HuurayApiException Create(int httpStatus, JsonNode? body, string method, string path) =>
+        Create(httpStatus, body, method, path, retryAfter: null);
+
+    /// <summary>
+    /// Maps a response onto the right exception type, with the <c>Retry-After</c> header the
+    /// client read from it for a 429.
+    /// </summary>
+    internal static HuurayApiException Create(
+        int httpStatus,
+        JsonNode? body,
+        string method,
+        string path,
+        TimeSpan? retryAfter)
     {
         int? status = ReadInt32(body, "Status");
         string? statusMessage = ReadString(body, "StatusMessage") ?? ReadString(body, "Message");
@@ -105,6 +119,7 @@ public class HuurayApiException : HuurayException
             401 or 403 => new HuurayAuthException(message, httpStatus, status, statusMessage, redacted, method, path),
             404 => new HuurayNotFoundException(message, httpStatus, status, statusMessage, redacted, method, path),
             422 => new HuurayValidationException(message, httpStatus, status, statusMessage, redacted, method, path),
+            429 => new HuurayRateLimitException(message, httpStatus, status, statusMessage, redacted, method, path, retryAfter),
             >= 500 => new HuurayServerException(message, httpStatus, status, statusMessage, redacted, method, path),
             _ => new HuurayApiException(message, httpStatus, status, statusMessage, redacted, method, path),
         };
@@ -225,6 +240,58 @@ public sealed class HuurayValidationException : HuurayApiException
         : base(message, httpStatus, status, statusMessage, body, method, path)
     {
     }
+}
+
+/// <summary>
+/// HTTP 429: the rate limit for your IP address was exceeded and the request was not processed.
+/// </summary>
+/// <remarks>
+/// <para>
+/// Because the request was not processed, it is safe to send the same request again after
+/// waiting <see cref="RetryAfter"/>. That holds for an order, a resend, a cancel and an upload
+/// too: a 429 is never a <see cref="HuurayIndeterminateOrderException"/>.
+/// </para>
+/// <para>
+/// Reads wait and try again by themselves first, so they throw this when those retries are used
+/// up, or at once when the wait asked for is longer than <see cref="RetryOptions.MaxDelay"/>.
+/// An order, a resend, a cancel and an upload are never retried automatically, and throw it on
+/// the first 429.
+/// </para>
+/// </remarks>
+public sealed class HuurayRateLimitException : HuurayApiException
+{
+    /// <summary>Creates a rate-limit exception.</summary>
+    /// <param name="message">A description of what went wrong.</param>
+    /// <param name="httpStatus">HTTP status of the response.</param>
+    /// <param name="status">The <c>Status</c> field from the response body, when present.</param>
+    /// <param name="statusMessage">The <c>StatusMessage</c> field, or the deprecated <c>Message</c>.</param>
+    /// <param name="body">The parsed response body, already redacted.</param>
+    /// <param name="method">The HTTP method of the failed request.</param>
+    /// <param name="path">The path of the failed request.</param>
+    /// <param name="retryAfter">The <c>Retry-After</c> header in whole seconds, when the response carried one.</param>
+    public HuurayRateLimitException(
+        string message,
+        int httpStatus,
+        int? status,
+        string? statusMessage,
+        JsonNode? body,
+        string method,
+        string path,
+        TimeSpan? retryAfter)
+        : base(message, httpStatus, status, statusMessage, body, method, path)
+    {
+        RetryAfter = retryAfter;
+    }
+
+    /// <summary>
+    /// How long to wait before sending the request again: the response's <c>Retry-After</c>
+    /// header in whole seconds.
+    /// </summary>
+    /// <remarks>
+    /// <see langword="null"/> when the header was absent or not whole seconds: an HTTP-date, a
+    /// negative value and a fraction all read as <see langword="null"/>.
+    /// </remarks>
+    public TimeSpan? RetryAfter { get; }
 }
 
 /// <summary>

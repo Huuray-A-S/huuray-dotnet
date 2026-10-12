@@ -44,6 +44,10 @@ public sealed class OrdersResource
     /// unreadable response or a 5xx throws <see cref="HuurayIndeterminateOrderException"/>
     /// instead — do not retry it, reconcile.
     /// </para>
+    /// <para>
+    /// A 429 is different: the request was not processed, so it throws
+    /// <see cref="HuurayRateLimitException"/> and the same order can be sent again after waiting.
+    /// </para>
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="request"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">The quantity or the recipient list is invalid.</exception>
@@ -453,7 +457,8 @@ public sealed class OrdersResource
         {
             // The request may already have been processed. Never retry it here; make the
             // caller reconcile instead. A 4xx is deliberately not caught: that order was
-            // definitively rejected and nothing was created.
+            // definitively rejected and nothing was created. That includes a 429, which the
+            // specification says was not processed.
             //
             // OperationCanceledException is included on purpose. A caller-supplied token
             // firing mid-flight — an ASP.NET Core request abort, say — leaves the order in

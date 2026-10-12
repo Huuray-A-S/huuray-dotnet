@@ -42,6 +42,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are left to the API.
 - `PdfDocument.ToString()` prints `Content` as `[N bytes]`. The conformance gates exercise both
   methods with every `PdfRequest` field; the coverage gate expects eleven operations.
+- **Rate limiting.** The specification now documents a 429 on every operation: the rate limit
+  for your IP address was exceeded and the request was not processed. It is thrown as
+  `HuurayRateLimitException`, a `HuurayApiException` (which a 429 was before) with `RetryAfter`:
+  the `Retry-After` header in whole seconds, or null when absent or not whole seconds.
+- **Reads wait `Retry-After` after a 429**, at least 1 second, in place of the backoff. A wait
+  longer than `RetryOptions.MaxDelay` (4 seconds by default) is not slept through:
+  `HuurayRateLimitException` is thrown at once, as it is when the retries are used up.
+  `Pdfs.GetWhenReadyAsync` ends its wait with it.
+- **A 429 on an order, a resend, a cancel or an upload is not retried**, and on `/v4/Order` it
+  is `HuurayRateLimitException`, never `HuurayIndeterminateOrderException`: the request was not
+  processed, so the same request can be sent again after waiting.
 
 ### Changed
 

@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Text.Json.Nodes;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace Huuray.Tests;
 
@@ -43,10 +45,11 @@ public static class Fake
         HashEncoding? hashEncoding = null,
         TimeSpan? timeout = null,
         Func<string>? nonceFactory = null,
-        string? userAgent = null)
+        string? userAgent = null,
+        Func<TimeSpan, CancellationToken, Task>? delay = null)
     {
         RecordingHandler handler = new(response ?? new MockResponse());
-        return Build(handler, retry, baseUrl, hashEncoding, timeout, nonceFactory, userAgent);
+        return Build(handler, retry, baseUrl, hashEncoding, timeout, nonceFactory, userAgent, delay);
     }
 
     public static TestHarness ClientWithQueue(
@@ -55,10 +58,11 @@ public static class Fake
         string? baseUrl = null,
         HashEncoding? hashEncoding = null,
         TimeSpan? timeout = null,
-        Func<string>? nonceFactory = null)
+        Func<string>? nonceFactory = null,
+        Func<TimeSpan, CancellationToken, Task>? delay = null)
     {
         RecordingHandler handler = new(responses);
-        return Build(handler, retry, baseUrl, hashEncoding, timeout, nonceFactory, userAgent: null);
+        return Build(handler, retry, baseUrl, hashEncoding, timeout, nonceFactory, userAgent: null, delay);
     }
 
     /// <summary>Parses a JSON literal for use as a canned response body.</summary>
@@ -78,7 +82,8 @@ public static class Fake
         HashEncoding? hashEncoding,
         TimeSpan? timeout,
         Func<string>? nonceFactory,
-        string? userAgent)
+        string? userAgent,
+        Func<TimeSpan, CancellationToken, Task>? delay)
     {
         HttpClient httpClient = new(handler, disposeHandler: false)
         {
@@ -97,6 +102,11 @@ public static class Fake
             UserAgent = userAgent,
         };
 
-        return new TestHarness(new HuurayClient(options, httpClient), handler);
+        // Without a wait of its own the client is built as a consumer builds it, on Task.Delay.
+        HuurayClient client = delay is null
+            ? new HuurayClient(options, httpClient)
+            : new HuurayClient(options, httpClient, delay);
+
+        return new TestHarness(client, handler);
     }
 }

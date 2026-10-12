@@ -42,8 +42,13 @@ public sealed record RetryOptions
     /// <remarks>A negative value counts as zero.</remarks>
     public TimeSpan? BaseDelay { get; init; }
 
-    /// <summary>Ceiling for a single backoff wait. Default 4s.</summary>
-    /// <remarks>At most 4294967294 milliseconds; a negative value counts as zero.</remarks>
+    /// <summary>Ceiling for a single wait between attempts. Default 4s.</summary>
+    /// <remarks>
+    /// At most 4294967294 milliseconds; a negative value counts as zero. A 429 is waited for as
+    /// long as its <c>Retry-After</c> says (at least 1 second) in place of the backoff; when that
+    /// is longer than this ceiling, nothing is waited and <see cref="HuurayRateLimitException"/>
+    /// is thrown at once.
+    /// </remarks>
     public TimeSpan? MaxDelay { get; init; }
 
     /// <summary>The defaults, which are deliberately conservative.</summary>

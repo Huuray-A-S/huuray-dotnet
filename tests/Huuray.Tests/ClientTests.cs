@@ -366,6 +366,7 @@ public class ErrorMappingTests
     [InlineData(403, typeof(HuurayAuthException))]
     [InlineData(404, typeof(HuurayNotFoundException))]
     [InlineData(422, typeof(HuurayValidationException))]
+    [InlineData(429, typeof(HuurayRateLimitException))]
     [InlineData(500, typeof(HuurayServerException))]
     [InlineData(400, typeof(HuurayApiException))]
     public async Task MapsEachHttpStatusToTheRightExceptionType(int status, Type expected)

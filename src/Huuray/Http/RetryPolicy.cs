@@ -5,7 +5,7 @@ using System.Globalization;
 namespace Huuray;
 
 /// <summary>
-/// The resolved retry knobs, plus the two decisions the send loop needs from them.
+/// The resolved retry knobs, plus the three decisions the send loop needs from them.
 /// </summary>
 internal sealed class RetryPolicy
 {
@@ -13,14 +13,20 @@ internal sealed class RetryPolicy
     /// HTTP statuses worth repeating a <em>read</em> for.
     /// </summary>
     /// <remarks>
-    /// <c>429</c> is included defensively: it is not a documented response on any v4
-    /// endpoint, so this client never assumes rate limiting exists — but if one appears,
-    /// backing off is strictly better than hammering.
+    /// <c>429</c> is a documented response on every v4 operation: the rate limit was exceeded
+    /// and the request was not processed. Its <c>Retry-After</c> header takes the place of the
+    /// backoff; see <see cref="RateLimitDelay"/>.
     /// </remarks>
     private static readonly HashSet<int> RetryableStatuses = new() { 408, 425, 429, 500, 502, 503, 504 };
 
     /// <summary>The longest delay <see cref="System.Threading.Tasks.Task.Delay(TimeSpan)"/> accepts.</summary>
     private static readonly TimeSpan MaxDelayValue = TimeSpan.FromMilliseconds(4_294_967_294);
+
+    /// <summary>
+    /// The shortest wait after a <c>429</c> that named one, so a <c>Retry-After: 0</c> never
+    /// sets off back-to-back signed requests.
+    /// </summary>
+    private static readonly TimeSpan MinRetryAfter = TimeSpan.FromSeconds(1);
 
     private RetryPolicy(int maxRetries, TimeSpan baseDelay, TimeSpan maxDelay)
     {
@@ -55,8 +61,8 @@ internal sealed class RetryPolicy
 
         // Task.Delay throws above 4294967294 ms, and the wait runs only after a first
         // attempt has already been sent, so the limit is checked here, at construction.
-        // MaxDelay bounds every wait: BackoffDelay caps it with Math.Min, so BaseDelay
-        // needs no limit of its own.
+        // MaxDelay bounds every wait: BackoffDelay caps it with Math.Min and RateLimitDelay
+        // refuses a longer one, so BaseDelay needs no limit of its own.
         CheckDelay(nameof(RetryOptions.MaxDelay), maxDelay);
 
         return new RetryPolicy(
@@ -84,6 +90,20 @@ internal sealed class RetryPolicy
         double exponential = BaseDelay.TotalMilliseconds * Math.Pow(2, attempt);
         double capped = Math.Min(exponential, MaxDelay.TotalMilliseconds);
         return TimeSpan.FromMilliseconds(Random.Shared.NextDouble() * capped);
+    }
+
+    /// <summary>
+    /// The wait before repeating a read after a <c>429</c> that carried <c>Retry-After</c>:
+    /// that many seconds, but at least 1, in place of <see cref="BackoffDelay"/>.
+    /// </summary>
+    /// <returns>
+    /// <see langword="null"/> when that wait is longer than <see cref="MaxDelay"/>: nothing is
+    /// waited and the caller gets the rate-limit exception at once, to decide for itself.
+    /// </returns>
+    internal TimeSpan? RateLimitDelay(TimeSpan retryAfter)
+    {
+        TimeSpan wait = retryAfter < MinRetryAfter ? MinRetryAfter : retryAfter;
+        return wait > MaxDelay ? null : wait;
     }
 
     private static void CheckDelay(string name, TimeSpan delay)

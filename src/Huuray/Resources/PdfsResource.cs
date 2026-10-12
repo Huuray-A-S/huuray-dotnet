@@ -76,8 +76,9 @@ public sealed class PdfsResource
     /// <see cref="PdfResult.RetryAfter"/>, or let <see cref="GetWhenReadyAsync"/> do the asking.
     /// <para>
     /// Retried on connection failures and on 408, 425, 429, 500, 502, 503 and 504, with a fresh
-    /// nonce each time. A PDF can run to several megabytes and take longer than other calls:
-    /// Huuray suggests a <see cref="HuurayClientOptions.Timeout"/> of 100 seconds for it.
+    /// nonce each time; after a 429 the wait is its <c>Retry-After</c>. A PDF can run to several
+    /// megabytes and take longer than other calls: Huuray suggests a
+    /// <see cref="HuurayClientOptions.Timeout"/> of 100 seconds for it.
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="request"/> is <see langword="null"/>.</exception>
@@ -86,6 +87,10 @@ public sealed class PdfsResource
     /// </exception>
     /// <exception cref="HuurayNotFoundException">The order or voucher was not found, or is cancelled.</exception>
     /// <exception cref="HuurayValidationException">The API rejected the request, for example an order with more than three receivers.</exception>
+    /// <exception cref="HuurayRateLimitException">
+    /// The API answered 429 and the retries were used up, or its <c>Retry-After</c> is longer than
+    /// <see cref="RetryOptions.MaxDelay"/>.
+    /// </exception>
     /// <exception cref="HuurayApiException">The API returned another non-2xx response.</exception>
     /// <exception cref="HuurayConnectionException">
     /// The request never completed, or the response was unusable — including a document whose
@@ -120,7 +125,8 @@ public sealed class PdfsResource
     /// <c>202</c> it waits <see cref="PdfResult.RetryAfter"/>, or 30 seconds when the API sent none,
     /// but never less than 1 second, and asks again with a new signed request. It gives up before
     /// a wait would pass <paramref name="maxWait"/>. Any other 2xx is treated like 202; any other
-    /// answer ends the wait at once, as an exception.
+    /// answer ends the wait at once, as an exception. That includes a 429 that outlives the
+    /// retries of the request it answered: <see cref="HuurayRateLimitException"/>.
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="request"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="maxWait"/> is negative or above 4294967294 milliseconds.</exception>
@@ -226,13 +232,11 @@ public sealed class PdfsResource
                 item.Content));
         }
 
-        // Retry-After in whole seconds only. An HTTP-date reads as null like any other value
-        // that is not whole seconds; a negative value or a fraction never parses at all.
         PdfResult result = new(
             response.HttpStatus == 200,
             response.Data?.OrderUID,
             documents,
-            response.RetryAfter?.Delta);
+            response.RetryAfter);
 
         return (result, response.Data?.StatusMessage);
     }

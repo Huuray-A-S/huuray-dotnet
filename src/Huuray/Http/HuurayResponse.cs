@@ -1,4 +1,4 @@
-using System.Net.Http.Headers;
+using System;
 
 namespace Huuray;
 
@@ -14,5 +14,5 @@ namespace Huuray;
 /// <typeparam name="T">The deserialised body type.</typeparam>
 /// <param name="Data">The deserialised body, or <see langword="null"/> if the body was the JSON literal <c>null</c>.</param>
 /// <param name="HttpStatus">The HTTP status of the response.</param>
-/// <param name="RetryAfter">The parsed <c>Retry-After</c> header, or <see langword="null"/> when absent or unparseable.</param>
-internal sealed record HuurayResponse<T>(T? Data, int HttpStatus, RetryConditionHeaderValue? RetryAfter);
+/// <param name="RetryAfter">The <c>Retry-After</c> header in whole seconds, or <see langword="null"/> when absent or not whole seconds.</param>
+internal sealed record HuurayResponse<T>(T? Data, int HttpStatus, TimeSpan? RetryAfter);
