@@ -171,7 +171,7 @@ PdfDocument document = pdf.Documents[0];         // FileName, VoucherIds, and Co
 
 **The PDF is a bearer instrument.** It carries the redeemable code, so whoever holds the file can spend the gift card. Never log `Content`, and keep it no longer than you need it; `PdfDocument.ToString()` prints its size, never its bytes, and `Redaction` masks any `Content` field.
 
-The API token needs the Search permission, and the API serves only orders with at most three receivers, answering 422 (`HuurayValidationException`) for larger ones; the client leaves both to the API. A PDF can run to several megabytes and take longer than other calls, so Huuray suggests a 100-second `Timeout` for them, for example on a second client. Nothing in this client caps the response size.
+The API token needs the Search permission, and the API serves only orders with at most 10 receivers, answering 422 (`HuurayValidationException`) for larger ones; the client leaves both to the API. A PDF can run to several megabytes and take longer than other calls, so Huuray suggests a 100-second `Timeout` for them, for example on a second client. Nothing in this client caps the response size.
 
 ## Seven things worth knowing
 

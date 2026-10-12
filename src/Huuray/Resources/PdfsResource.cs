@@ -20,7 +20,7 @@ namespace Huuray;
 /// </para>
 /// <para>
 /// <c>POST /v4/Pdf</c> is read-only, so it is retried like the other reads. The API token needs
-/// the Search permission, and the API serves only orders with at most three receivers,
+/// the Search permission, and the API serves only orders with at most 10 receivers,
 /// answering 422 for larger ones. This client checks neither.
 /// </para>
 /// </remarks>
@@ -86,7 +86,7 @@ public sealed class PdfsResource
     /// <paramref name="cancellationToken"/> was already cancelled, so nothing was sent.
     /// </exception>
     /// <exception cref="HuurayNotFoundException">The order or voucher was not found, or is cancelled.</exception>
-    /// <exception cref="HuurayValidationException">The API rejected the request, for example an order with more than three receivers.</exception>
+    /// <exception cref="HuurayValidationException">The API rejected the request, for example an order with more than 10 receivers.</exception>
     /// <exception cref="HuurayRateLimitException">
     /// The API answered 429 and the retries were used up, or its <c>Retry-After</c> is longer than
     /// <see cref="RetryOptions.MaxDelay"/>.

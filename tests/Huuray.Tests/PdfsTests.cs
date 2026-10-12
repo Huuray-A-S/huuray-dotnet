@@ -160,7 +160,7 @@ public class PdfRequestShapeTests
     [Fact]
     public async Task SendsEveryValueAsGiven_TheApiDecidesWhatItAccepts()
     {
-        // No GUID check and no receiver count: an order with more than three receivers is the
+        // No GUID check and no receiver count: an order with more than 10 receivers is the
         // API's 422 to give.
         TestHarness harness = Fake.Client(PdfsTestData.ReadyOne);
 
@@ -376,7 +376,7 @@ public class PdfErrorTests
     [InlineData(400, "Invalid request", typeof(HuurayApiException))]
     [InlineData(401, "Restricted Access", typeof(HuurayAuthException))]
     [InlineData(404, "No order was found with the given OrderUID", typeof(HuurayNotFoundException))]
-    [InlineData(422, "The PDF can only be fetched for orders with at most 3 receivers", typeof(HuurayValidationException))]
+    [InlineData(422, "The PDF can only be fetched for orders with at most 10 receivers", typeof(HuurayValidationException))]
     [InlineData(429, "Too Many Requests", typeof(HuurayRateLimitException))]
     [InlineData(500, "The PDF could not be generated", typeof(HuurayServerException))]
     public async Task MapsTheEnvelopeOntoTheExistingExceptionTypes(int status, string statusMessage, Type expected)

@@ -24,8 +24,9 @@ public sealed record GetPdfRequest
     public int? VoucherId { get; init; }
 
     /// <summary>
-    /// A PDF template uid from <c>Templates.ListAsync()</c>. Leave unset for the PDF template the
-    /// order's delivery email was sent with (<see cref="CreateOrderRequest.PdfTemplateUid"/>).
+    /// The uid of a Downloadable PDF template from <c>Templates.ListAsync()</c>. Leave unset for the
+    /// PDF template the order's delivery email was sent with
+    /// (<see cref="CreateOrderRequest.PdfTemplateUid"/>).
     /// </summary>
     /// <remarks>
     /// Without one, an order placed without a PDF template is rejected with a 422, thrown as

@@ -39,7 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `POST /v4/Pdf` is a read: retried on connection failures and on 408, 425, 429, 500, 502, 503
   and 504, with a fresh nonce. A 200 whose `Content` is not valid base64 throws
   `HuurayConnectionException`, without quoting it. The order id, template id and receiver count
-  are left to the API.
+  are left to the API: it serves orders with at most 10 receivers, answering 422 for larger
+  ones, and takes any Downloadable PDF template as `GetPdfRequest.PdfTemplateUid`.
 - `PdfDocument.ToString()` prints `Content` as `[N bytes]`. The conformance gates exercise both
   methods with every `PdfRequest` field; the coverage gate expects eleven operations.
 - **Rate limiting.** The specification now documents a 429 on every operation: the rate limit
@@ -75,6 +76,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (delivered by post only), where it is the template the gift cards are printed with. For
   email delivery `TemplateId` must still be an email template, which is left to the API.
   `Recipients` is still required only when `TemplateId` is set.
+- **`openapi/huuray-v4.json` is the specification published 9 October 2026.** It adds a 429
+  response with a `Retry-After` header to every operation, documents
+  `DeliveryPDFTemplateUid` without `DeliveryTemplateId` for a physical product, and puts the
+  gift card PDF limit at 10 receivers, where it said 3. No path or schema changed shape.
 
 ### Fixed
 
