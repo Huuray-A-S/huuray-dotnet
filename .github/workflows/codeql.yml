@@ -41,9 +41,28 @@ jobs:
           languages: csharp
           build-mode: manual
           queries: security-and-quality
-          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Build for analysis
         run: dotnet build Huuray.sln --configuration Release
 
       - uses: github/codeql-action/analyze@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        with:
+          # The results are filtered below, then uploaded.
+          upload: never
+          output: sarif-results
+
+      # The build writes source-generator output (the System.Text.Json context) under
+      # obj/. It is not code anyone here wrote or can change, and paths-ignore does not
+      # apply to a compiled language that is built for analysis, so results in obj/ and
+      # bin/ are dropped from the report here.
+      - name: Drop results in generated code
+        run: |
+          jq '.runs[].results |= map(select(
+                [.locations[]?.physicalLocation.artifactLocation.uri // ""]
+                | any(test("(^|/)(obj|bin)/")) | not))' \
+            sarif-results/csharp.sarif > "$RUNNER_TEMP/csharp.sarif"
+          echo "Kept $(jq '[.runs[].results[]] | length' "$RUNNER_TEMP/csharp.sarif") of $(jq '[.runs[].results[]] | length' sarif-results/csharp.sarif) results."
+
+      - uses: github/codeql-action/upload-sarif@5595ccaf912efad79be6eef63a5619ff05969be3 # v4.37.6
+        with:
+          sarif_file: ${{ runner.temp }}/csharp.sarif

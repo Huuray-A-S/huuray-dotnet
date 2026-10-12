@@ -1,7 +1,0 @@
-name: Huuray .NET CodeQL configuration
-
-# The build writes source-generator output (the System.Text.Json context) under
-# obj/. It is not code anyone here wrote or can change, so alerts in it are noise.
-paths-ignore:
-  - '**/obj/**'
-  - '**/bin/**'
