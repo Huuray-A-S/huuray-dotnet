@@ -147,13 +147,14 @@ public sealed record CreateOrderRequest
     public int? TemplateId { get; init; }
 
     /// <summary>
-    /// Optional PDF template uid from <c>Templates.ListAsync()</c>, attached as a document to the
-    /// emails sent by <see cref="TemplateId"/>.
+    /// Optional PDF template uid from <c>Templates.ListAsync()</c>. For email delivery it is
+    /// attached as a document to the emails sent by <see cref="TemplateId"/>, which must then be
+    /// an email template. For a physical product (delivered by post only) it is the template the
+    /// gift cards are printed with, and <see cref="TemplateId"/> is not required.
     /// </summary>
     /// <remarks>
-    /// Requires <see cref="TemplateId"/>: setting this without one throws before any request is
-    /// made. The API also requires that template to be an email template, which this client
-    /// cannot check without a lookup, so it leaves that to the API.
+    /// Sent as given, with or without <see cref="TemplateId"/>. This client cannot tell an email
+    /// template or a physical product without a lookup, so it leaves both to the API.
     /// The PDF template must also be available for the ordered product's brand and country
     /// (<see cref="PdfTemplate.BrandName"/> / <see cref="PdfTemplate.Country"/>, where null means
     /// any); otherwise the API rejects the order with a 422, thrown as
@@ -274,9 +275,10 @@ public sealed record SendRewardRequest
     public required int TemplateId { get; init; }
 
     /// <summary>
-    /// Optional PDF template uid from <c>Templates.ListAsync()</c>, attached as a document to the
-    /// email sent by <see cref="TemplateId"/>. The API requires <see cref="TemplateId"/> to be an
-    /// email template when this is set.
+    /// Optional PDF template uid from <c>Templates.ListAsync()</c>. For email delivery it is
+    /// attached as a document to the email sent by <see cref="TemplateId"/>, which must then be an
+    /// email template. For a physical product (delivered by post only) it is the template the gift
+    /// card is printed with.
     /// </summary>
     /// <remarks>
     /// The PDF template must also be available for the ordered product's brand and country

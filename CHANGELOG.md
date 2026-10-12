@@ -58,6 +58,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ToString()`.
 - **`Content` is a bearer field.** `Redaction` replaces any `Content` value with the secret
   marker, as it does `Code`, `CVV` and `RedeemLink`: a gift card PDF carries the code.
+- **`PdfTemplateUid` no longer requires `TemplateId`.** `CreateAsync` and `CreateSyncAsync`
+  threw `ArgumentException` before any request; the order is now sent as given. The
+  specification now documents it without a delivery template for a physical product
+  (delivered by post only), where it is the template the gift cards are printed with. For
+  email delivery `TemplateId` must still be an email template, which is left to the API.
+  `Recipients` is still required only when `TemplateId` is set.
 
 ### Fixed
 
@@ -142,9 +148,10 @@ First release. Complete coverage of the Huuray API v4.
 - PDF templates, added to the v4 specification: `Templates.ListAsync()` returns
   `PdfTemplates` (`PdfTemplate`: `Uid`, `Name`, `Type`, `Language`, `Country`, `BrandName`)
   alongside `Templates`. `CreateOrderRequest` and `SendRewardRequest` accept an optional
-  `PdfTemplateUid`, sent as `DeliveryPDFTemplateUid` and omitted when unset. Setting it
-  without `TemplateId` throws before any request is made; the API requires that template to
-  be an email template.
+  `PdfTemplateUid`, sent as `DeliveryPDFTemplateUid` and omitted when unset. For email
+  delivery it is attached to the emails sent by `TemplateId`, which must then be an email
+  template; for a physical product (delivered by post only) it is the template the gift cards
+  are printed with, and `TemplateId` is not required.
 - `SendRewardAsync` — one gift card to one recipient in a single call.
 - `RequestAsync` — an escape hatch that signs any call and returns a `JsonNode`.
 - Read-only CLI tool `Huuray.Cli`: `balance`, `catalogue`, `templates`, `stock`, `rates`,

@@ -46,10 +46,7 @@ public sealed class OrdersResource
     /// </para>
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="request"/> is <see langword="null"/>.</exception>
-    /// <exception cref="ArgumentException">
-    /// The quantity or the recipient list is invalid, or <see cref="CreateOrderRequest.PdfTemplateUid"/>
-    /// is set without <see cref="CreateOrderRequest.TemplateId"/>.
-    /// </exception>
+    /// <exception cref="ArgumentException">The quantity or the recipient list is invalid.</exception>
     /// <exception cref="HuurayIndeterminateOrderException">The outcome of the order is unknown.</exception>
     /// <exception cref="OperationCanceledException">
     /// <paramref name="cancellationToken"/> was already cancelled, so nothing was sent.
@@ -87,8 +84,7 @@ public sealed class OrdersResource
     /// </remarks>
     /// <exception cref="ArgumentNullException"><paramref name="request"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">
-    /// The quantity exceeds <see cref="SyncQuantityLimit"/>, the recipient list is invalid, or
-    /// <see cref="CreateOrderRequest.PdfTemplateUid"/> is set without <see cref="CreateOrderRequest.TemplateId"/>.
+    /// The quantity exceeds <see cref="SyncQuantityLimit"/>, or the recipient list is invalid.
     /// </exception>
     /// <exception cref="HuurayIndeterminateOrderException">The outcome of the order is unknown.</exception>
     /// <exception cref="OperationCanceledException">
@@ -360,14 +356,8 @@ public sealed class OrdersResource
                 nameof(request));
         }
 
-        if (request.PdfTemplateUid is not null && request.TemplateId is null)
-        {
-            throw new ArgumentException(
-                "TemplateId is required when PdfTemplateUid is set — the API attaches the PDF to the emails " +
-                "sent by the delivery template, and requires that template to be an email template.",
-                nameof(request));
-        }
-
+        // PdfTemplateUid is sent with or without TemplateId: the specification needs no
+        // delivery template for a physical product, and only the API knows which product is one.
         if (request.TemplateId is not null)
         {
             int count = request.Recipients?.Count ?? 0;

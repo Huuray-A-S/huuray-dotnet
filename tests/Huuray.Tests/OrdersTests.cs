@@ -379,19 +379,64 @@ public class PdfTemplateOrderTests
     }
 
     [Theory]
-    [InlineData("create")]
-    [InlineData("createSync")]
-    public async Task RejectsAPdfTemplateUidWithoutATemplateId_BeforeAnyRequest(string method)
+    // A physical product (delivered by post only) is printed with the PDF template and needs
+    // no delivery template. SendRewardRequest always carries a TemplateId, so it has no such case.
+    [InlineData("create", false)]
+    [InlineData("createSync", true)]
+    public async Task SendsAPdfTemplateUidWithoutATemplateId_AsItIs(string method, bool sync)
     {
-        TestHarness harness = Fake.Client(new MockResponse { Json = Fake.Json("{\"OrderUID\":\"x\"}") });
+        TestHarness harness = Fake.Client(
+            new MockResponse { Json = Fake.Json("{\"OrderUID\":\"x\",\"Vouchers\":[]}") });
         CreateOrderRequest request = OrdersTestData.Base with { PdfTemplateUid = PdfUid };
 
-        ArgumentException error = await Assert.ThrowsAsync<ArgumentException>(() => method == "create"
+        Task placing = method == "create"
             ? harness.Client.Orders.CreateAsync(request)
-            : harness.Client.Orders.CreateSyncAsync(request));
+            : harness.Client.Orders.CreateSyncAsync(request);
 
-        Assert.Contains("TemplateId is required when PdfTemplateUid is set", error.Message, StringComparison.Ordinal);
-        Assert.Contains("email template", error.Message, StringComparison.Ordinal);
+        await placing;
+
+        CapturedRequest call = Assert.Single(harness.Calls);
+        Assert.Equal("/v4/Order", call.Path);
+        JsonObject body = call.BodyJson!.AsObject();
+        Assert.Equal(PdfUid, body["DeliveryPDFTemplateUid"]!.GetValue<string>());
+        Assert.False(body.ContainsKey("DeliveryTemplateId"));
+        Assert.False(body.ContainsKey("Recipients"));
+        Assert.Equal(
+            "{\"Product\":{\"Token\":\"tok\",\"Value\":5000,\"Currency\":\"DKK\",\"Quantity\":1},\"Sync\":" +
+            (sync ? "true" : "false") + ",\"DeliveryPDFTemplateUid\":\"" + PdfUid + "\"}",
+            call.Body);
+        Assert.Empty(Spec.ValidateRequestBody(Spec.RequestBody("POST", "/v4/Order"), call));
+    }
+
+    [Fact]
+    public async Task SendsRecipientsUnchecked_WithAPdfTemplateUidAndNoTemplateId()
+    {
+        // The recipient rule is tied to TemplateId alone: without one, neither a missing list
+        // nor a count that is not 1 or Quantity is the client's to refuse.
+        TestHarness harness = Fake.Client(new MockResponse { Json = Fake.Json("{\"OrderUID\":\"x\"}") });
+
+        await harness.Client.Orders.CreateAsync(OrdersTestData.Base with
+        {
+            Quantity = 5,
+            PdfTemplateUid = PdfUid,
+            Recipients = new[] { new Recipient { Name = "A" }, new Recipient { Name = "B" } },
+        });
+
+        JsonObject body = Assert.Single(harness.Calls).BodyJson!.AsObject();
+        Assert.Equal(PdfUid, body["DeliveryPDFTemplateUid"]!.GetValue<string>());
+        Assert.False(body.ContainsKey("DeliveryTemplateId"));
+        Assert.Equal(2, body["Recipients"]!.AsArray().Count);
+    }
+
+    [Fact]
+    public async Task StillRequiresRecipients_WhenATemplateIdIsSetBesideThePdfTemplateUid()
+    {
+        TestHarness harness = Fake.Client();
+
+        ArgumentException error = await Assert.ThrowsAsync<ArgumentException>(() =>
+            harness.Client.Orders.CreateAsync(OrdersTestData.Base with { TemplateId = 42, PdfTemplateUid = PdfUid }));
+
+        Assert.Contains("Recipients is required when TemplateId is set", error.Message, StringComparison.Ordinal);
         Assert.Empty(harness.Calls);
     }
 
@@ -399,7 +444,7 @@ public class PdfTemplateOrderTests
     [InlineData("create")]
     [InlineData("createSync")]
     [InlineData("sendReward")]
-    public async Task ChecksOnlyThatTemplateIdIsPresent_NotWhatKindOfTemplateItIs(string method)
+    public async Task DoesNotCheckWhatKindOfTemplateTemplateIdIs(string method)
     {
         // Whether TemplateId is an email template is the API's call; the client cannot know
         // without a lookup. A phone-only recipient hints at an SMS template, and must still be sent.
