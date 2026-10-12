@@ -272,6 +272,10 @@ public sealed record SendRewardRequest
     public required Recipient Recipient { get; init; }
 
     /// <summary>Delivery template id from <c>Templates.ListAsync()</c>.</summary>
+    /// <remarks>
+    /// Always required here. For a physical product ordered with only a PDF template, use
+    /// <see cref="OrdersResource.CreateAsync"/>.
+    /// </remarks>
     public required int TemplateId { get; init; }
 
     /// <summary>
@@ -281,6 +285,8 @@ public sealed record SendRewardRequest
     /// card is printed with.
     /// </summary>
     /// <remarks>
+    /// <see cref="TemplateId"/> is sent with it in every case: for a physical product ordered with
+    /// only a PDF template, use <see cref="OrdersResource.CreateAsync"/>.
     /// The PDF template must also be available for the ordered product's brand and country
     /// (<see cref="PdfTemplate.BrandName"/> / <see cref="PdfTemplate.Country"/>, where null means
     /// any); otherwise the API rejects the order with a 422, thrown as
